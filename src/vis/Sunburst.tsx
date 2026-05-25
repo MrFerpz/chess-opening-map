@@ -21,7 +21,7 @@ import { colorForLocalPath, winRate } from './colorScale';
 import { CenterBoard } from './CenterBoard';
 import { Tooltip } from './Tooltip';
 import { EvalBar } from './EvalBar';
-import { formatEval } from '../hooks/useCloudEval';
+import { formatEval } from '../hooks/useStockfish';
 import { useStockfish } from '../hooks/useStockfish';
 import { drawBoardOnCanvas } from './boardToCanvas';
 import { ArrowLeft, ArrowLeftFromLine } from 'lucide-react';

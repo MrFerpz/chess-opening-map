@@ -1,5 +1,5 @@
-import type { EvalResult } from '../hooks/useCloudEval';
-import { formatEval } from '../hooks/useCloudEval';
+import type { EvalResult } from '../hooks/useStockfish';
+import { formatEval } from '../hooks/useStockfish';
 
 interface Props {
   eval_: EvalResult | null | undefined;

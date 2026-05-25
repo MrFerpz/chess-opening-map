@@ -1,8 +1,8 @@
 import type { SerializedNode } from '../types';
 import { winRate } from './colorScale';
 import { colorForLocalPath } from './colorScale';
-import type { EvalResult } from '../hooks/useCloudEval';
-import { formatEval } from '../hooks/useCloudEval';
+import type { EvalResult } from '../hooks/useStockfish';
+import { formatEval } from '../hooks/useStockfish';
 
 interface Props {
   node: SerializedNode | null;

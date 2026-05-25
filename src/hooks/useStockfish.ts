@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { EvalResult } from './useCloudEval';
+
+export type EvalResult =
+  | { type: 'cp'; value: number }
+  | { type: 'mate'; value: number };
+
+export function formatEval(e: EvalResult): string {
+  if (e.type === 'mate') return e.value > 0 ? `#${e.value}` : `-#${Math.abs(e.value)}`;
+  const pawns = e.value / 100;
+  return (pawns >= 0 ? '+' : '') + pawns.toFixed(1);
+}
 
 export interface PositionEval {
   eval: EvalResult | null;
