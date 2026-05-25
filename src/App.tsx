@@ -105,6 +105,10 @@ function App() {
 
   const root = snapshot?.root ?? EMPTY_ROOT;
   const total = snapshot?.totalGames ?? 0;
+  // Use the focusPath that matches the current snapshot, not the live UI state.
+  // This keeps (root, snapshotFocusPath) consistent until the next snapshot arrives,
+  // eliminating the intermediate choppy state between a click and the new data.
+  const snapshotFocusPath = snapshot?.focusPath ?? focusPath;
   const openingName = useOpeningName(focusPath);
 
   useEffect(() => {
@@ -302,7 +306,7 @@ function App() {
                   root={root}
                   totalGames={total}
                   color={color}
-                  focusPath={focusPath}
+                  focusPath={snapshotFocusPath}
                   onFocusChange={setFocusPath}
                   size={680}
                   isMobile={isMobile}
@@ -327,7 +331,7 @@ function App() {
           <a href="https://gooseworks.io/" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, opacity: 0.5, transition: 'opacity 0.15s' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.opacity = '0.85'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.opacity = '0.5'; }}>
-            <img src="/GooseworksLogoWhite.webp" alt="Gooseworks" className="gooseworks-logo" style={{ height: 54, width: 'auto' }} />
+            <img src="/GooseworksLogoWhite.webp" alt="Gooseworks" className="gooseworks-logo" style={{ height: 108, width: 'auto' }} />
           </a>
         </div>
         <span>
@@ -352,9 +356,9 @@ function App() {
         .platform-btn:hover { border-color: var(--border-hover) !important; }
         .platform-btn.selected:hover { border-color: var(--accent-hover) !important; }
         footer a:hover { color: var(--text-muted) !important; }
-        .gooseworks-logo { height: 54px; width: auto; }
+        .gooseworks-logo { height: 108px; width: auto; }
         @media (max-width: 767px) {
-          .gooseworks-logo { height: 36px; }
+          .gooseworks-logo { height: 72px; }
           footer { padding: 12px 16px !important; font-size: 10px !important; }
         }
       `}</style>

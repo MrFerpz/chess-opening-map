@@ -101,6 +101,9 @@ export function Sunburst({
   // Refs into the DOM for imperative updates (bypasses React reconciliation).
   const pathRefsRef = useRef<Map<string, SVGPathElement>>(new Map());
   const textRefsRef = useRef<Map<string, SVGTextElement>>(new Map());
+  // Fill colours kept in sync with the current focusPath so the rAF loop
+  // can stamp the correct colour at the same moment it makes an arc visible.
+  const fillMapRef = useRef<Map<string, string>>(new Map());
 
   const rafRef = useRef<number | null>(null);
   const prevFocusPathRef = useRef<string[]>(focusPath);
@@ -183,6 +186,8 @@ export function Sunburst({
       if (pathEl) {
         if (rectVisible(r)) {
           pathEl.setAttribute('d', arcGen(r) ?? '');
+          const fill = fillMapRef.current.get(key);
+          if (fill) pathEl.setAttribute('fill', fill);
           pathEl.style.display = '';
         } else {
           pathEl.style.display = 'none';
@@ -392,7 +397,8 @@ export function Sunburst({
             const parent = d.parent as SunburstNode | null;
             const siblingIndex = parent?.children?.indexOf(d) ?? 0;
             const local = localPath(d);
-            const fill = colorForLocalPath(local, d.depth, siblingIndex);
+            const fill = colorForLocalPath(local, d.depth, siblingIndex, focusPath.length);
+            fillMapRef.current.set(key, fill);
             return (
               <path
                 key={key}

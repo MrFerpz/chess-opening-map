@@ -37,18 +37,21 @@ export function avgOppRating(n: SerializedNode): number | null {
 
 // Colour for a node based on the **local** path under the focus root.
 // localPath[0] = the first ply of the visible subtree → defines the hue family.
-// Lightness alternates by depth, so child rings shift shade vs their parent.
+// Lightness alternates by global ply: lighter = white's move, darker = black's move.
+// globalPly = focusPathLength + depthFromFocus (1-indexed: ply 1,3,5… = white; 2,4,6… = black).
 export function colorForLocalPath(
   localPath: string[],
   depthFromFocus: number,
   siblingIndex: number,
+  focusPathLength = 0,
 ): string {
   const first = localPath.length > 0 ? localPath[0] : null;
   const hue = hueFor(first);
   const chroma = 40 + Math.min(depthFromFocus, 6) * 4; // 40..64
   const baseL = 56;
-  // ply parity → strong shift; sibling parity → small shift
-  const lightness =
-    baseL + (depthFromFocus % 2 === 0 ? 8 : -6) + (siblingIndex % 2 === 0 ? 0 : -3);
+  const globalPly = focusPathLength + depthFromFocus;
+  // odd global ply = white's move → lighter; even = black's move → darker
+  const isWhiteMove = globalPly % 2 === 1;
+  const lightness = baseL + (isWhiteMove ? 8 : -6) + (siblingIndex % 2 === 0 ? 0 : -3);
   return hcl(hue, chroma, lightness).formatHex();
 }
