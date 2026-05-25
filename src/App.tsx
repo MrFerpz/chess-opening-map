@@ -140,21 +140,19 @@ function App() {
         />
       )}
       {/* ── Header — only shown once a session is active ── */}
-      {session && <header style={headerStyle}>
+      {session && <header style={isMobile ? { ...headerStyle, padding: '0 12px' } : headerStyle}>
         <div style={{ maxWidth: 1280, margin: '0 auto', width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <img src="/logo.webp" alt="Logo" onClick={() => setSession(null)} style={{ width: 36, height: 36, objectFit: 'contain', cursor: 'pointer' }} />
-            {!isMobile && (
-              <span onClick={() => setSession(null)} style={{ fontSize: 18, letterSpacing: '-0.03em', color: 'var(--text)', fontFamily: "'Plus Jakarta Sans', sans-serif", cursor: 'pointer' }}>
-                <span style={{ fontWeight: 300 }}>Opening</span><span style={{ fontWeight: 800 }}>Map</span>
-              </span>
-            )}
+            <span onClick={() => setSession(null)} style={{ fontSize: isMobile ? 16 : 18, letterSpacing: '-0.03em', color: 'var(--text)', fontFamily: "'Plus Jakarta Sans', sans-serif", cursor: 'pointer', flexShrink: 0 }}>
+              <span style={{ fontWeight: 300 }}>Opening</span><span style={{ fontWeight: 800 }}>Map</span>
+            </span>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button type="button" onClick={handleRefresh} style={headerBtnStyle} className="header-btn">
+            <button type="button" onClick={handleRefresh} style={isMobile ? { ...headerBtnStyle, padding: '6px 10px' } : headerBtnStyle} className="header-btn">
               {isMobile ? 'Refresh' : 'Refresh games'}
             </button>
-            <button type="button" onClick={() => setSession(null)} style={headerBtnStyle} className="header-btn">
+            <button type="button" onClick={() => setSession(null)} style={isMobile ? { ...headerBtnStyle, padding: '6px 10px' } : headerBtnStyle} className="header-btn">
               {isMobile ? 'Change' : 'Change user'}
             </button>
           </div>
@@ -341,7 +339,7 @@ function App() {
                       <div key={(line.san ?? '?') + i} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                         <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, fontSize: 11 }}>
                           <span style={{ fontWeight: 700, color: 'var(--text)', flexShrink: 0 }}>{line.san ?? '—'}</span>
-                          <span style={{ color: 'var(--text-muted)', flex: 1, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{line.count.toLocaleString()}</span>
+                          <span style={{ color: 'var(--text-muted)', flex: 1, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{line.count.toLocaleString()} games played</span>
                           <span style={{ color: 'var(--text-dim)', fontVariantNumeric: 'tabular-nums', minWidth: 30, textAlign: 'right' }}>{sharePct}%</span>
                         </div>
                         <div style={{ display: 'flex', height: 5, width: '100%', borderRadius: 2, overflow: 'hidden', background: 'var(--surface)' }}>
@@ -385,7 +383,7 @@ function App() {
                       isMobile={isMobile}
                       isNarrow={isNarrow}
                       visibleRings={isMobile ? 2 : undefined}
-                      holeUnits={isMobile ? 7 : undefined}
+                      holeUnits={isMobile ? 4 : undefined}
                       exportRef={sunburstRef}
                       openingName={openingName?.name ?? null}
                       onTopLinesChange={setNarrowTopLines}

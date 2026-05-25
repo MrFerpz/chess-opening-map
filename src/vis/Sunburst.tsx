@@ -55,6 +55,16 @@ interface Props {
 }
 
 const ANIM_MS = 350;
+const MOBILE_ZOOM_DELAY_MS = 140;
+
+const touchSurfaceStyle: React.CSSProperties = {
+  WebkitTapHighlightColor: 'transparent',
+  WebkitTouchCallout: 'none',
+  WebkitUserSelect: 'none',
+  userSelect: 'none',
+  touchAction: 'manipulation',
+  outline: 'none',
+};
 
 // Per-arc animation state — start rect, current target, animation start time + delay.
 interface ArcAnim {
@@ -104,6 +114,10 @@ export function Sunburst({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rootData.fen]);
 
+  useEffect(() => () => {
+    if (mobileZoomTimeoutRef.current != null) window.clearTimeout(mobileZoomTimeoutRef.current);
+  }, []);
+
   const radius = size / 2;
   const ringRadius = radius / (holeUnits + visibleRings);
   const holeRadius = ringRadius * holeUnits;
@@ -131,12 +145,13 @@ export function Sunburst({
   const rafRef = useRef<number | null>(null);
   const prevFocusPathRef = useRef<string[]>(focusPath);
   const justZoomedRef = useRef(false);
-  const svgRef = useRef<SVGSVGElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const focusFenRef = useRef<string>(STARTING_FEN);
   const colorRef = useRef<Color>(color);
   colorRef.current = color;
   const lastMousePos = useRef<{ x: number; y: number } | null>(null);
+  const highlightedArcKeyRef = useRef<string | null>(null);
+  const mobileZoomTimeoutRef = useRef<number | null>(null);
   // Set to true when focusPath changes; cleared after the next hover re-detection.
   const pendingHoverUpdate = useRef(false);
 
@@ -259,6 +274,47 @@ export function Sunburst({
       ctx.fillText(nd.san, 0, 0);
       ctx.restore();
     }
+
+    const highlightedKey = highlightedArcKeyRef.current;
+    const highlightedRect = highlightedKey ? rendered.get(highlightedKey) : null;
+    if (highlightedRect && rectVisible(highlightedRect)) {
+      const innerR = highlightedRect.y0 * rr;
+      const outerR = Math.max(highlightedRect.y0 * rr, highlightedRect.y1 * rr - dpr);
+      const padAngle = Math.min((highlightedRect.x1 - highlightedRect.x0) / 2, 0.005);
+      const padR = rr * 1.5;
+      const halfPad = padAngle > 0 && padR > 0 ? Math.asin(padAngle / 2 / padR) * 2 : 0;
+      const startAngle = highlightedRect.x0 + halfPad - Math.PI / 2;
+      const endAngle = highlightedRect.x1 - halfPad - Math.PI / 2;
+      if (endAngle > startAngle) {
+        ctx.save();
+        ctx.beginPath();
+        const inset = 3 * dpr;
+        ctx.arc(cx, cy, outerR - inset, startAngle, endAngle);
+        ctx.arc(cx, cy, innerR + inset, endAngle, startAngle, true);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(255,255,255,0.08)';
+        ctx.fill();
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        ctx.shadowColor = 'rgba(230,196,25,0.45)';
+        ctx.shadowBlur = 8 * dpr;
+        ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+        ctx.lineWidth = 5 * dpr;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = '#e6c419';
+        ctx.lineWidth = 2.25 * dpr;
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    // Outer separator ring.
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius * dpr - dpr, 0, 2 * Math.PI);
+    ctx.strokeStyle = '#252836';
+    ctx.lineWidth = 1.5 * dpr;
+    ctx.stroke();
   }
 
   // ─── rAF loop ─────────────────────────────────────────────────────────────
@@ -400,7 +456,7 @@ export function Sunburst({
   }, [nodes]);
 
   function getChartPoint(clientX: number, clientY: number) {
-    const el = svgRef.current ?? containerRef.current;
+    const el = containerRef.current;
     if (!el) return null;
     const rect = el.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return null;
@@ -431,7 +487,7 @@ export function Sunburst({
     return point != null && point.dist <= holeRadius;
   }
 
-  function handlePointerMove(ev: React.MouseEvent<SVGSVGElement>) {
+  function handlePointerMove(ev: React.MouseEvent<HTMLCanvasElement>) {
     lastMousePos.current = { x: ev.clientX, y: ev.clientY };
     const hit = getNodeAtClientPoint(ev.clientX, ev.clientY);
     if (!hit) {
@@ -442,7 +498,7 @@ export function Sunburst({
     evalCache.onHover(hit.data.fen);
   }
 
-  function handlePointerClick(ev: React.MouseEvent<SVGSVGElement>) {
+  function handlePointerClick(ev: React.MouseEvent<HTMLCanvasElement>) {
     const hit = getNodeAtClientPoint(ev.clientX, ev.clientY);
     if (hit) {
       handleClickArc(hit);
@@ -453,12 +509,37 @@ export function Sunburst({
     }
   }
 
+  function highlightArc(n: SunburstNode) {
+    highlightedArcKeyRef.current = pathKey(n);
+    paintCanvas(renderedRectsRef.current);
+  }
+
+  function handlePointerDown(ev: React.PointerEvent<HTMLCanvasElement>) {
+    if (!isMobile) return;
+    const hit = getNodeAtClientPoint(ev.clientX, ev.clientY);
+    if (!hit) return;
+    setMobileInfo(hit.data);
+    evalCache.onHover(hit.data.fen);
+    highlightArc(hit);
+  }
+
   const handleClickArc = (n: SunburstNode) => {
     const local = localPath(n);
     if (local.length === 0) return;
     if (isMobile) {
       setMobileInfo(n.data);
       evalCache.onHover(n.data.fen);
+      highlightArc(n);
+      if (mobileZoomTimeoutRef.current != null) {
+        window.clearTimeout(mobileZoomTimeoutRef.current);
+      }
+      mobileZoomTimeoutRef.current = window.setTimeout(() => {
+        highlightedArcKeyRef.current = null;
+        mobileZoomTimeoutRef.current = null;
+        forwardHistoryRef.current = [];
+        onFocusChange([...focusPath, ...local]);
+      }, MOBILE_ZOOM_DELAY_MS);
+      return;
     }
     forwardHistoryRef.current = [];
     onFocusChange([...focusPath, ...local]);
@@ -566,30 +647,18 @@ export function Sunburst({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', width: '100%' }}>
     <div style={{ display: 'flex', alignItems: 'center', gap: 14, width: '100%', overflow: 'visible' }}>
-    <div ref={containerRef} style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: size, height: 'auto', aspectRatio: '1 / 1', margin: '0 auto', overflow: 'visible', contain: 'layout' }}>
+    <div ref={containerRef} style={{ ...touchSurfaceStyle, position: 'relative', zIndex: 1, width: '100%', maxWidth: size, height: 'auto', aspectRatio: '1 / 1', margin: '0 auto', overflow: 'visible', contain: 'layout' }}>
       {/* Canvas: draws all arcs + labels */}
       <canvas
         ref={canvasRef}
         width={size * (typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1)}
         height={size * (typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1)}
-        style={{ display: 'block', width: '100%', height: 'auto', position: 'absolute', inset: 0, borderRadius: '50%' }}
-      />
-
-      {/* Thin SVG overlay: one event plane plus visible outer separator. */}
-      <svg
-        ref={svgRef}
-        width={size}
-        height={size}
-        viewBox={`${-radius} ${-radius} ${size} ${size}`}
-        style={{ display: 'block', userSelect: 'none', width: '100%', height: 'auto', position: 'absolute', inset: 0, cursor: 'pointer' }}
+        style={{ ...touchSurfaceStyle, display: 'block', width: '100%', height: 'auto', position: 'absolute', inset: 0, borderRadius: '50%', cursor: 'pointer' }}
+        onPointerDown={handlePointerDown}
         onMouseMove={handlePointerMove}
         onClick={handlePointerClick}
         onMouseLeave={() => { lastMousePos.current = null; setHover(null); evalCache.onLeave(); }}
-      >
-        <circle r={radius} fill="transparent" />
-        {/* Outer separator ring */}
-        <circle r={radius - 1} fill="none" stroke="#252836" strokeWidth={1.5} />
-      </svg>
+      />
 
       <CenterBoard
         fen={hover?.node.fen ?? focusFen}
@@ -701,7 +770,7 @@ export function Sunburst({
               >
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, fontSize: 11, width: '100%' }}>
                   <span style={{ fontWeight: 700, color: 'var(--text)', flexShrink: 0 }}>{line.san ?? '—'}</span>
-                  <span style={{ color: 'var(--text-muted)', flex: 1, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{line.count.toLocaleString()}</span>
+                  <span style={{ color: 'var(--text-muted)', flex: 1, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{line.count.toLocaleString()} games played</span>
                   <span style={{ color: wrColor, fontVariantNumeric: 'tabular-nums', minWidth: 30, textAlign: 'right', fontWeight: 600 }}>{wrPct}%</span>
                 </div>
                 <div style={{ display: 'flex', height: 5, width: '100%', borderRadius: 2, overflow: 'hidden', background: 'var(--surface)' }}>
@@ -725,6 +794,56 @@ export function Sunburst({
     {isMobile && (
       <div style={{ width: '100%', maxWidth: size, margin: '8px auto 0', boxSizing: 'border-box', padding: '0 8px' }}>
         <EvalBar eval_={focusEval} height={0} horizontal hideLabel />
+      </div>
+    )}
+    {isMobile && !mobileInfo && topLines.length > 0 && (
+      <div style={{ width: '100%', maxWidth: size, margin: '8px auto 0', boxSizing: 'border-box', padding: '0 8px' }}>
+        <div style={{
+          background: 'rgba(13,15,22,0.97)',
+          border: '1px solid var(--border)',
+          borderRadius: 8,
+          padding: '10px 14px',
+          fontSize: 12,
+          lineHeight: 1.5,
+          fontFamily: 'inherit',
+          color: 'var(--text)',
+        }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-dim)', marginBottom: 2 }}>
+              Top Lines
+            </span>
+            {topLines.map((line, i) => {
+              const lTotal = line.wins + line.draws + line.losses;
+              const winPct = lTotal > 0 ? (line.wins / lTotal) * 100 : 0;
+              const drawPct = lTotal > 0 ? (line.draws / lTotal) * 100 : 0;
+              const lossPct = lTotal > 0 ? (line.losses / lTotal) * 100 : 0;
+              const wrPct = lTotal > 0 ? Math.round((line.wins + 0.5 * line.draws) / lTotal * 100) : 0;
+              const wrColor = wrPct >= 55 ? 'var(--win)' : wrPct <= 45 ? 'var(--loss)' : 'var(--text-dim)';
+              return (
+                <div
+                  key={(line.san ?? '?') + i}
+                  onClick={() => {
+                    if (!line.san) return;
+                    const target = nodes.find((n) => n.depth === 1 && n.data.san === line.san);
+                    if (target) handleClickArc(target);
+                  }}
+                  style={{ display: 'flex', flexDirection: 'column', gap: 2, cursor: line.san ? 'pointer' : 'default' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, fontSize: 11 }}>
+                    <span style={{ fontWeight: 700, color: 'var(--text)', flexShrink: 0 }}>{line.san ?? '-'}</span>
+                    <span style={{ color: 'var(--text-muted)', flex: 1, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{line.count.toLocaleString()} games played</span>
+                    <span style={{ color: wrColor, fontVariantNumeric: 'tabular-nums', minWidth: 30, textAlign: 'right', fontWeight: 600 }}>{wrPct}%</span>
+                  </div>
+                  <div style={{ display: 'flex', height: 5, width: '100%', borderRadius: 2, overflow: 'hidden', background: 'var(--surface)', opacity: 0.58 }}>
+                    <div style={{ width: `${winPct}%`, background: 'var(--win)' }} />
+                    <div style={{ width: `${drawPct}%`, background: 'var(--text-dim)' }} />
+                    <div style={{ width: `${lossPct}%`, background: 'var(--loss)' }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
     )}
     {isMobile && mobileInfo && (() => {
@@ -793,7 +912,7 @@ export function Sunburst({
             {topLines.length > 0 && (
               <div style={{ borderTop: '1px solid var(--border)', marginTop: 10, paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
                 <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-dim)', marginBottom: 2 }}>
-                  Top Continuations
+                  Top Lines
                 </span>
                 {topLines.map((line, i) => {
                   const lTotal = line.wins + line.draws + line.losses;
@@ -814,7 +933,7 @@ export function Sunburst({
                     >
                       <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, fontSize: 11 }}>
                         <span style={{ fontWeight: 700, color: 'var(--text)', flexShrink: 0 }}>{line.san ?? '—'}</span>
-                        <span style={{ color: 'var(--text-muted)', flex: 1, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{line.count.toLocaleString()}</span>
+                        <span style={{ color: 'var(--text-muted)', flex: 1, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{line.count.toLocaleString()} games played</span>
                         <span style={{ color: wrColor, fontVariantNumeric: 'tabular-nums', minWidth: 30, textAlign: 'right', fontWeight: 600 }}>{wrPct}%</span>
                       </div>
                       <div style={{ display: 'flex', height: 5, width: '100%', borderRadius: 2, overflow: 'hidden', background: 'var(--surface)', opacity: 0.58 }}>
