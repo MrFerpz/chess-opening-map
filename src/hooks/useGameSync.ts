@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import type { Color, Filter, Game, Platform, SnapshotRequest } from '../types';
 import { fetchGames } from '../api/platform';
 import { getSyncMeta, listGames, putGames, setSyncMeta } from '../store/cache';
@@ -34,7 +34,24 @@ export function useGameSync() {
     error: null,
   });
 
+  // Shared mutable ref so stop() can signal the running start() loop.
+  const stopRef = useRef(false);
+  // Hold the snapshot args so stop() can flush and render what we have.
+  const pendingSnapshotRef = useRef<{ client: AggregatorClient; color: Color; filter: Filter; request: SnapshotRequest } | null>(null);
+
+  const stop = useCallback(() => {
+    stopRef.current = true;
+    const p = pendingSnapshotRef.current;
+    if (p) {
+      p.client.requestSnapshot(p.color, p.filter, p.request);
+      pendingSnapshotRef.current = null;
+    }
+    setState((s) => ({ ...s, status: 'done' }));
+  }, []);
+
   const start = useCallback(async ({ client, platform, username, color, filter, request, limit }: StartArgs) => {
+    stopRef.current = false;
+    pendingSnapshotRef.current = { client, color, filter, request };
     setState({ status: 'loading-cache', fromCache: 0, fetched: 0, error: null });
     try {
       client.reset();
@@ -56,7 +73,7 @@ export function useGameSync() {
       const cachedIds = new Set(cached.map((g) => g.id));
 
       for await (const g of fetchGames(platform, username, since)) {
-        if (fetched >= fetchBudget) break;
+        if (fetched >= fetchBudget || stopRef.current) break;
         if (cachedIds.has(g.id)) continue;
         batch.push(g);
         fetched++;
@@ -72,12 +89,17 @@ export function useGameSync() {
         await putGames(platform, username, batch);
         client.ingest(batch);
       }
-      client.requestSnapshot(color, filter, request);
+      // If stop() already fired it already called requestSnapshot; skip here.
+      if (!stopRef.current) {
+        client.requestSnapshot(color, filter, request);
+      }
+      pendingSnapshotRef.current = null;
       if (newestPlayedAt > 0) {
         await setSyncMeta(platform, username, newestPlayedAt);
       }
       setState((s) => ({ ...s, status: 'done', fetched }));
     } catch (err) {
+      pendingSnapshotRef.current = null;
       setState((s) => ({
         ...s,
         status: 'error',
@@ -86,5 +108,5 @@ export function useGameSync() {
     }
   }, []);
 
-  return { state, start };
+  return { state, start, stop };
 }

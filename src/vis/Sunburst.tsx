@@ -563,7 +563,7 @@ export function Sunburst({
       />
 
       <Tooltip
-        node={hover?.node ?? null}
+        node={isMobile ? null : (hover?.node ?? null)}
         x={hover?.x ?? 0}
         y={hover?.y ?? 0}
         totalGames={totalGames}

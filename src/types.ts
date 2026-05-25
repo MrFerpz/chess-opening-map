@@ -83,4 +83,4 @@ export const STARTING_FEN =
 // Default depth shown outward from the focused ring.
 export const DEFAULT_VIEW_DEPTH = 6;
 // Default number of most-recent games to include.
-export const DEFAULT_GAME_LIMIT = 5000;
+export const DEFAULT_GAME_LIMIT = 2000;

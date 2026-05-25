@@ -71,6 +71,12 @@ const MOVE_INTERVAL_MS = 500;
 const PAUSE_MS = 1800;
 const FACT_INTERVAL_MS = 4000;
 
+const MOTC_GIFS = [
+  { src: '/motcRd5.gif',  label: 'Match of the Century: Bobby Fischer vs Boris Spassky Rd 5' },
+  { src: '/motcRd6.gif',  label: 'Match of the Century: Bobby Fischer vs Boris Spassky Rd 6' },
+  { src: '/motcRd13.gif', label: 'Match of the Century: Bobby Fischer vs Boris Spassky Rd 13' },
+];
+
 const FACTS = [
   'There are more possible chess games than atoms in the observable universe.',
   'The word "checkmate" comes from the Persian phrase "Shah Mat",the king is dead.',
@@ -113,6 +119,7 @@ export function LoadingBoard({ state, isMobile }: Props) {
 
   const isWorking = state.status === 'loading-cache' || state.status === 'fetching';
 
+  const [motcGif] = useState(() => MOTC_GIFS[Math.floor(Math.random() * MOTC_GIFS.length)]);
   const [fen, setFen] = useState(STARTING_FEN);
   const [gameLabel, setGameLabel] = useState('');
   const [factIndex, setFactIndex] = useState(() => Math.floor(Math.random() * FACTS.length));
@@ -121,7 +128,7 @@ export function LoadingBoard({ state, isMobile }: Props) {
   const factTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    if (!isWorking) return;
+    if (!isWorking || isMobile) return;
 
     const game = FAMOUS_GAMES[Math.floor(Math.random() * FAMOUS_GAMES.length)];
     setGameLabel(game.label);
@@ -190,15 +197,25 @@ export function LoadingBoard({ state, isMobile }: Props) {
           boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
         }}
       >
-        <Chessboard
-          options={{
-            id: 'loading-board',
-            position: fen,
-            allowDragging: false,
-            showNotation: false,
-            animationDurationInMs: MOVE_INTERVAL_MS - 60,
-          }}
-        />
+        {isMobile ? (
+          <img
+            src={motcGif.src}
+            alt="Chess animation"
+            width={BOARD_SIZE}
+            height={BOARD_SIZE}
+            style={{ display: 'block', width: BOARD_SIZE, height: BOARD_SIZE }}
+          />
+        ) : (
+          <Chessboard
+            options={{
+              id: 'loading-board',
+              position: fen,
+              allowDragging: false,
+              showNotation: false,
+              animationDurationInMs: MOVE_INTERVAL_MS - 60,
+            }}
+          />
+        )}
       </div>
 
       {/* Labels below the board */}
@@ -215,7 +232,7 @@ export function LoadingBoard({ state, isMobile }: Props) {
         }}
       >
         <div style={{ color: '#555', font: 'italic 11px system-ui', maxWidth: 280, textAlign: 'center' }}>
-          {gameLabel}
+          {isMobile ? motcGif.label : gameLabel}
         </div>
         <div
           style={{

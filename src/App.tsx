@@ -64,7 +64,7 @@ function App() {
   );
 
   const { client, snapshot, error: workerError } = useAggregator(color, filter, request);
-  const { state: sync, start } = useGameSync();
+  const { state: sync, start, stop } = useGameSync();
 
   useEffect(() => { setFocusPath([]); }, [color]);
   useEffect(() => { setFocusPath([]); }, [session?.platform, session?.username]);
@@ -308,26 +308,19 @@ function App() {
               {(sync.status === 'fetching' || sync.status === 'loading-cache') && (
                 <div style={statusCardStyle}>
                   <Spinner />
-                  <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+                  <span style={{ color: 'var(--text-muted)', fontSize: 12, flex: 1 }}>
                     {sync.status === 'loading-cache'
                       ? 'Loading cached games…'
                       : `Fetching… ${sync.fetched}${sync.fromCache ? ` (+${sync.fromCache} cached)` : ''}`}
                   </span>
-                </div>
-              )}
-
-              {/* Position info — on mobile there is no corner space, so keep it in the sidebar.
-                  On narrow/desktop it's shown as a chart corner overlay (see Sunburst). */}
-              {isMobile && sync.status === 'done' && total > 0 && (
-                <div style={{ color: 'var(--text-muted)', fontSize: 12, padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.01em' }}>{total.toLocaleString()} games</span>
-                  <span style={{ color: 'var(--text-dim)', fontSize: 10.5 }}>
-                    Depth {focusPath.length} · {focusPath.length === 0 ? 'start' : focusPath.join(' ')}
-                  </span>
-                  {openingName && (
-                    <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', marginTop: 2, fontSize: 10.5 }}>
-                      {openingName.name}
-                    </span>
+                  {sync.status === 'fetching' && (
+                    <button
+                      type="button"
+                      onClick={stop}
+                      style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text-muted)', fontSize: 11, padding: '2px 8px', cursor: 'pointer', flexShrink: 0 }}
+                    >
+                      Stop
+                    </button>
                   )}
                 </div>
               )}
@@ -379,22 +372,71 @@ function App() {
                   isMobile={isMobile}
                 />
               ) : sync.status === 'done' && total > 1 ? (
-                <Sunburst
-                  root={root}
-                  totalGames={total}
-                  color={color}
-                  colorMode={colorMode}
-                  focusPath={snapshotFocusPath}
-                  onFocusChange={setFocusPath}
-                  size={680}
-                  isMobile={isMobile}
-                  isNarrow={isNarrow}
-                  visibleRings={isMobile ? 3 : undefined}
-                  holeUnits={isMobile ? 7 : undefined}
-                  exportRef={sunburstRef}
-                  openingName={openingName?.name ?? null}
-                  onTopLinesChange={setNarrowTopLines}
-                />
+                <>
+                  <div style={{ width: '100%' }}>
+                    <Sunburst
+                      root={root}
+                      totalGames={total}
+                      color={color}
+                      colorMode={colorMode}
+                      focusPath={snapshotFocusPath}
+                      onFocusChange={setFocusPath}
+                      size={680}
+                      isMobile={isMobile}
+                      isNarrow={isNarrow}
+                      visibleRings={isMobile ? 3 : undefined}
+                      holeUnits={isMobile ? 7 : undefined}
+                      exportRef={sunburstRef}
+                      openingName={openingName?.name ?? null}
+                      onTopLinesChange={setNarrowTopLines}
+                    />
+                    {/* Position info + top lines below the chart on mobile */}
+                    {isMobile && (
+                      <div style={{ padding: '0 8px', display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
+                        <div style={{ color: 'var(--text-muted)', fontSize: 12, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.01em' }}>{total.toLocaleString()} games</span>
+                          <span style={{ color: 'var(--text-dim)', fontSize: 10.5 }}>
+                            Depth {focusPath.length} · {focusPath.length === 0 ? 'start' : focusPath.join(' ')}
+                          </span>
+                          {openingName && (
+                            <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', marginTop: 2, fontSize: 10.5 }}>
+                              {openingName.name}
+                            </span>
+                          )}
+                        </div>
+                        {narrowTopLines.length > 0 && (
+                          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 5 }}>
+                            <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-dim)', marginBottom: 2 }}>
+                              Top Lines
+                            </span>
+                            {narrowTopLines.map((line, i) => {
+                              const lTotal = line.wins + line.draws + line.losses;
+                              const winPct = lTotal > 0 ? (line.wins / lTotal) * 100 : 0;
+                              const drawPct = lTotal > 0 ? (line.draws / lTotal) * 100 : 0;
+                              const lossPct = lTotal > 0 ? (line.losses / lTotal) * 100 : 0;
+                              const wrPct = lTotal > 0 ? Math.round((line.wins + 0.5 * line.draws) / lTotal * 100) : 0;
+                              const wrColor = wrPct >= 55 ? 'var(--win)' : wrPct <= 45 ? 'var(--loss)' : 'var(--text-dim)';
+                              return (
+                                <div key={(line.san ?? '?') + i} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, fontSize: 11 }}>
+                                    <span style={{ fontWeight: 700, color: 'var(--text)', flexShrink: 0 }}>{line.san ?? '—'}</span>
+                                    <span style={{ color: 'var(--text-muted)', flex: 1, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{line.count.toLocaleString()}</span>
+                                    <span style={{ color: wrColor, fontVariantNumeric: 'tabular-nums', minWidth: 30, textAlign: 'right', fontWeight: 600 }}>{wrPct}%</span>
+                                  </div>
+                                  <div style={{ display: 'flex', height: 5, width: '100%', borderRadius: 2, overflow: 'hidden', background: 'var(--surface)' }}>
+                                    <div style={{ width: `${winPct}%`, background: 'var(--win)' }} />
+                                    <div style={{ width: `${drawPct}%`, background: 'var(--text-dim)' }} />
+                                    <div style={{ width: `${lossPct}%`, background: 'var(--loss)' }} />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </>
               ) : sync.status === 'done' ? (
                 <div style={{ color: 'var(--text-muted)', padding: 48, fontSize: 14 }}>
                   No games found for this user/filter combination.
