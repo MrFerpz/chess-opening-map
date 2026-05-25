@@ -23,6 +23,7 @@ import { CenterBoard } from './CenterBoard';
 import { Tooltip } from './Tooltip';
 import { EvalBar } from './EvalBar';
 import { useEvalCache } from '../hooks/useCloudEval';
+import { drawBoardOnCanvas } from './boardToCanvas';
 
 export interface SunburstHandle {
   exportPng: (filename?: string) => Promise<void>;
@@ -98,43 +99,46 @@ export function Sunburst({
   const justZoomedRef = useRef(false);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const focusFenRef = useRef<string>(STARTING_FEN);
+  const colorRef = useRef<Color>(color);
+  colorRef.current = color;
 
   useImperativeHandle(exportRef, () => ({
     exportPng: async (filename = 'chess-openings.png') => {
       const svg = svgRef.current;
-      const container = containerRef.current;
-      if (!svg || !container) return;
+      if (!svg) return;
 
-      // Find the chessboard canvas inside the container.
-      const boardCanvas = container.querySelector('canvas') as HTMLCanvasElement | null;
+      const dpr = window.devicePixelRatio || 1;
 
-      const svgData = new XMLSerializer().serializeToString(svg);
+      // 1. Rasterize the sunburst SVG. Replace the cross-origin font name so
+      //    the canvas stays untainted and toBlob() doesn't throw.
+      const clone = svg.cloneNode(true) as SVGSVGElement;
+      clone.setAttribute('width', String(size));
+      clone.setAttribute('height', String(size));
+      let svgData = new XMLSerializer().serializeToString(clone);
+      svgData = svgData.replace(/DM Sans/g, 'system-ui');
       const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
       const svgUrl = URL.createObjectURL(svgBlob);
-
-      const img = new Image();
-      await new Promise<void>((resolve, reject) => {
-        img.onload = () => resolve();
-        img.onerror = reject;
+      const sunburstImg = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => { URL.revokeObjectURL(svgUrl); resolve(img); };
+        img.onerror = () => { URL.revokeObjectURL(svgUrl); reject(); };
         img.src = svgUrl;
       });
-      URL.revokeObjectURL(svgUrl);
 
+      // 2. Composite onto a canvas.
       const canvas = document.createElement('canvas');
-      const dpr = window.devicePixelRatio || 1;
       canvas.width = size * dpr;
       canvas.height = size * dpr;
       const ctx = canvas.getContext('2d')!;
       ctx.scale(dpr, dpr);
-      ctx.drawImage(img, 0, 0, size, size);
+      ctx.drawImage(sunburstImg, 0, 0, size, size);
 
-      // Composite the chessboard canvas on top if present.
-      if (boardCanvas) {
-        const boardSize_ = boardCanvas.offsetWidth || boardCanvas.width / dpr;
-        const bx = (size - boardSize_) / 2;
-        const by = (size - boardSize_) / 2;
-        ctx.drawImage(boardCanvas, bx, by, boardSize_, boardSize_);
-      }
+      // 3. Draw the board programmatically so we bypass DOM serialization
+      //    issues (react-chessboard renders HTML divs, not a single SVG).
+      const bx = (size - boardSize) / 2;
+      const by = (size - boardSize) / 2;
+      await drawBoardOnCanvas(ctx, focusFenRef.current, colorRef.current, boardSize, bx, by);
 
       canvas.toBlob((blob) => {
         if (!blob) return;
@@ -146,7 +150,7 @@ export function Sunburst({
         URL.revokeObjectURL(url);
       }, 'image/png');
     },
-  }), [size]);
+  }), [size, boardSize]);
 
   // ─── rAF loop ────────────────────────────────────────────────────────────
   // Defined once, never recreated. Reads animMap and writes directly to DOM.
@@ -301,6 +305,7 @@ export function Sunburst({
   );
 
   const focusFen = rootData.fen || STARTING_FEN;
+  focusFenRef.current = focusFen;
   const focusEval = evalCache.getEval(focusFen);
 
   return (

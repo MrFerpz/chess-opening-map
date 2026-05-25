@@ -110,11 +110,6 @@ function App() {
   const total = snapshot?.totalGames ?? 0;
   const openingName = useOpeningName(focusPath);
 
-  const headerLine = useMemo(() => {
-    if (!session) return null;
-    return `${session.platform === 'lichess' ? 'Lichess' : 'Chess.com'} · ${session.username}`;
-  }, [session]);
-
   return (
     <div style={{ minHeight: '100vh', color: 'var(--text)', display: 'flex', flexDirection: 'column' }}>
       {/* ── Header — only shown once a session is active ── */}
@@ -127,11 +122,6 @@ function App() {
             <span style={{ fontWeight: 800, fontSize: 18, letterSpacing: '-0.03em', color: 'var(--text)' }}>
               Chess Opening Visualiser
             </span>
-            {headerLine && (
-              <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: 13, marginLeft: 4 }}>
-                — {headerLine}
-              </span>
-            )}
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button type="button" onClick={handleRefresh} style={headerBtnStyle} className="header-btn">
@@ -152,6 +142,61 @@ function App() {
           <div style={{ display: 'flex', gap: 32, alignItems: 'flex-start', paddingTop: 24 }}>
             {/* ── Left sidebar ── */}
             <aside style={sidebarStyle}>
+              {/* Platform + username identity (username is editable) */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '4px 2px 8px' }}>
+                <button
+                  type="button"
+                  title={`Switch to ${session.platform === 'lichess' ? 'Chess.com' : 'Lichess'}`}
+                  onClick={() => setSession({ ...session, platform: session.platform === 'lichess' ? 'chesscom' : 'lichess' })}
+                  style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', flexShrink: 0 }}
+                >
+                  <img
+                    src={session.platform === 'lichess' ? '/lichesslogo.webp' : '/chesscomlogo.webp'}
+                    alt={session.platform}
+                    style={{
+                      width: 18,
+                      height: 18,
+                      objectFit: 'contain',
+                      filter: session.platform === 'lichess' ? 'invert(1)' : 'none',
+                      opacity: 0.7,
+                      transition: 'opacity 0.15s',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.7'; }}
+                  />
+                </button>
+                <input
+                  key={session.username}
+                  defaultValue={session.username}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') e.currentTarget.blur();
+                    if (e.key === 'Escape') { e.currentTarget.value = session.username; e.currentTarget.blur(); }
+                  }}
+                  onBlur={(e) => {
+                    const next = e.currentTarget.value.trim();
+                    if (next && next !== session.username) setSession({ ...session, username: next });
+                    else e.currentTarget.value = session.username;
+                  }}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    borderBottom: '1px solid transparent',
+                    outline: 'none',
+                    fontWeight: 600,
+                    fontSize: 14,
+                    color: 'var(--text)',
+                    letterSpacing: '-0.01em',
+                    fontFamily: 'inherit',
+                    padding: '1px 0',
+                    width: '100%',
+                    cursor: 'text',
+                    transition: 'border-color 0.15s',
+                  }}
+                  onFocus={(e) => { e.currentTarget.style.borderBottomColor = 'var(--accent)'; }}
+                  onBlurCapture={(e) => { e.currentTarget.style.borderBottomColor = 'transparent'; }}
+                />
+              </div>
+
               <div style={controlCardStyle}>
                 <div style={{ marginBottom: 14 }}>
                   <label style={controlLabelStyle}>Playing as</label>

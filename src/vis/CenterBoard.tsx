@@ -13,6 +13,7 @@ interface Props {
 export function CenterBoard({ fen, size, orientation, hoverSan, hoverFromFen }: Props) {
   return (
     <div
+      data-board-wrapper=""
       style={{
         width: size,
         height: size,

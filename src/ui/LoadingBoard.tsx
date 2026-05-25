@@ -90,6 +90,14 @@ const FACTS = [
   'Chess has been played in space — cosmonauts played against ground controllers in 1970.',
 ];
 
+// Board size and container height are matched to the sunburst view so the board
+// sits in the same screen position before and after loading completes.
+// size = 680 (sunburst), ringRadius = 680/2 / (5+6), boardSize = floor(holeRadius * sqrt(2))
+const SUNBURST_SIZE = 680;
+const RING_RADIUS = (SUNBURST_SIZE / 2) / (5.0 + 6);
+const HOLE_RADIUS = RING_RADIUS * 5.0;
+const BOARD_SIZE = Math.floor(HOLE_RADIUS * Math.SQRT2);
+
 interface Props {
   state: SyncRunState;
 }
@@ -153,24 +161,21 @@ export function LoadingBoard({ state }: Props) {
     statusLabel = `Fetching games… ${state.fetched}${state.fromCache ? ` (+${state.fromCache} cached)` : ''}`;
   else if (state.status === 'error') statusLabel = `Error: ${state.error ?? 'unknown'}`;
 
+  const boardOffset = (SUNBURST_SIZE - BOARD_SIZE) / 2;
+
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 16,
-        padding: '40px 0',
-      }}
-    >
+    <div style={{ position: 'relative', width: SUNBURST_SIZE, height: SUNBURST_SIZE }}>
+      {/* Board pinned to exact centre, matching CenterBoard position in Sunburst */}
       <div
         style={{
-          width: 240,
-          height: 240,
-          borderRadius: 6,
+          position: 'absolute',
+          left: boardOffset,
+          top: boardOffset,
+          width: BOARD_SIZE,
+          height: BOARD_SIZE,
+          borderRadius: 4,
           overflow: 'hidden',
-          boxShadow: '0 4px 32px rgba(0,0,0,0.5)',
-          flexShrink: 0,
+          boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
         }}
       >
         <Chessboard
@@ -183,26 +188,41 @@ export function LoadingBoard({ state }: Props) {
           }}
         />
       </div>
-      <div style={{ color: '#555', font: 'italic 11px system-ui', maxWidth: 280, textAlign: 'center' }}>
-        {gameLabel}
-      </div>
+
+      {/* Labels below the board */}
       <div
         style={{
-          maxWidth: 320,
-          textAlign: 'center',
-          opacity: factVisible ? 1 : 0,
-          transition: 'opacity 0.4s ease',
+          position: 'absolute',
+          top: boardOffset + BOARD_SIZE + 16,
+          left: 0,
+          right: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 12,
         }}
       >
-        <span style={{ color: 'var(--accent)', font: '11px system-ui', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-          Did you know?
-        </span>
-        <div style={{ color: '#ccc', font: '13px/1.5 system-ui', marginTop: 4 }}>
-          {FACTS[factIndex]}
+        <div style={{ color: '#555', font: 'italic 11px system-ui', maxWidth: 280, textAlign: 'center' }}>
+          {gameLabel}
         </div>
-      </div>
-      <div style={{ color: '#555', font: '12px system-ui', marginTop: 4 }}>
-        {statusLabel}
+        <div
+          style={{
+            maxWidth: 320,
+            textAlign: 'center',
+            opacity: factVisible ? 1 : 0,
+            transition: 'opacity 0.4s ease',
+          }}
+        >
+          <span style={{ color: 'var(--accent)', font: '11px system-ui', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            Did you know?
+          </span>
+          <div style={{ color: '#ccc', font: '13px/1.5 system-ui', marginTop: 4 }}>
+            {FACTS[factIndex]}
+          </div>
+        </div>
+        <div style={{ color: '#555', font: '12px system-ui' }}>
+          {statusLabel}
+        </div>
       </div>
     </div>
   );
