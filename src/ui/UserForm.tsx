@@ -12,16 +12,43 @@ const PLATFORMS: { id: Platform; label: string; logo: string; invertLogo?: boole
   { id: 'chesscom', label: 'Chess.com', logo: '/chesscomlogo.webp' },
 ];
 
+const HISTORY_KEY = 'openingmap-history';
+const MAX_HISTORY = 5;
+
+function loadHistory(): Record<Platform, string[]> {
+  try {
+    return JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '{}');
+  } catch {
+    return {} as Record<Platform, string[]>;
+  }
+}
+
+function saveToHistory(platform: Platform, username: string) {
+  const all = loadHistory();
+  const list = [username, ...(all[platform] ?? []).filter((u) => u !== username)].slice(0, MAX_HISTORY);
+  localStorage.setItem(HISTORY_KEY, JSON.stringify({ ...all, [platform]: list }));
+}
+
 export function UserForm({ onSubmit, disabled, isMobile }: Props) {
   const [platform, setPlatform] = useState<Platform>('lichess');
   const [username, setUsername] = useState('');
+  const [history, setHistory] = useState<Record<Platform, string[]>>(loadHistory);
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    const u = username.trim();
+    go(username.trim());
+  };
+
+  const go = (u: string) => {
     if (!u) return;
+    saveToHistory(platform, u);
+    setHistory(loadHistory());
     onSubmit(platform, u);
   };
+
+  const suggestions = (history[platform] ?? []).filter(
+    (u) => !username.trim() || u.toLowerCase().startsWith(username.trim().toLowerCase()),
+  );
 
   return (
     <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12, width: isMobile ? '100%' : 420 }}>
@@ -109,6 +136,32 @@ export function UserForm({ onSubmit, disabled, isMobile }: Props) {
           Go
         </button>
       </div>
+
+      {/* Recent searches — always rendered to avoid layout shift */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: -4, minHeight: 30 }}>
+          {suggestions.map((u) => (
+            <button
+              key={u}
+              type="button"
+              disabled={disabled}
+              onClick={() => go(u)}
+              style={{
+                padding: '4px 12px',
+                borderRadius: 20,
+                border: '1px solid var(--border)',
+                background: 'var(--surface-raised)',
+                color: 'var(--text-muted)',
+                fontSize: 13,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--border-hover)'; e.currentTarget.style.color = 'var(--text)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-muted)'; }}
+            >
+              {u}
+            </button>
+          ))}
+        </div>
     </form>
   );
 }

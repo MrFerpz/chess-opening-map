@@ -15,6 +15,7 @@ import { useGameSync } from './hooks/useGameSync';
 import { useOpeningName } from './hooks/useOpeningName';
 import { clearUser, findGameByMoves } from './store/cache';
 import { encodeShareUrl, decodeShareUrl } from './lib/shareUrl';
+import { ConfirmModal } from './ui/ConfirmModal';
 
 interface Session {
   platform: Platform;
@@ -49,6 +50,7 @@ function App() {
   const [focusPath, setFocusPath] = useState<string[]>(() => decodeShareUrl()?.focusPath ?? []);
   const [reloadCount, setReloadCount] = useState(0);
   const [copyLabel, setCopyLabel] = useState<'Copy link' | 'Copied!'>('Copy link');
+  const [confirmRefresh, setConfirmRefresh] = useState(false);
   const [fullGameMoves, setFullGameMoves] = useState<string[] | null>(null);
   const [fullGameId, setFullGameId] = useState<string | null>(null);
   const sunburstRef = useRef<SunburstHandle>(null);
@@ -94,9 +96,14 @@ function App() {
     });
   };
 
-  const handleRefresh = async () => {
+  const handleRefresh = () => {
     if (!session) return;
-    if (!confirm(`Re-fetch all games for ${session.username}? This clears the cached copy.`)) return;
+    setConfirmRefresh(true);
+  };
+
+  const doRefresh = async () => {
+    if (!session) return;
+    setConfirmRefresh(false);
     await clearUser(session.platform, session.username);
     setFocusPath([]);
     setReloadCount((n) => n + 1);
@@ -122,14 +129,21 @@ function App() {
 
   return (
     <div style={{ minHeight: '100vh', color: 'var(--text)', display: 'flex', flexDirection: 'column' }}>
+      {confirmRefresh && session && (
+        <ConfirmModal
+          message={`Re-fetch all games for ${session.username}? This clears the cached copy.`}
+          onConfirm={() => { void doRefresh(); }}
+          onCancel={() => setConfirmRefresh(false)}
+        />
+      )}
       {/* ── Header — only shown once a session is active ── */}
       {session && <header style={headerStyle}>
         <div style={{ maxWidth: 1280, margin: '0 auto', width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <img src="/logo.webp" alt="Logo" onClick={() => setSession(null)} style={{ width: 28, height: 28, objectFit: 'contain', cursor: 'pointer' }} />
+            <img src="/logo.webp" alt="Logo" onClick={() => setSession(null)} style={{ width: 36, height: 36, objectFit: 'contain', cursor: 'pointer' }} />
             {!isMobile && (
-              <span style={{ fontWeight: 800, fontSize: 18, letterSpacing: '-0.03em', color: 'var(--text)' }}>
-                Chess Opening Visualiser
+              <span onClick={() => setSession(null)} style={{ fontSize: 18, letterSpacing: '-0.03em', color: 'var(--text)', fontFamily: "'Plus Jakarta Sans', sans-serif", cursor: 'pointer' }}>
+                <span style={{ fontWeight: 300 }}>Opening</span><span style={{ fontWeight: 800 }}>Map</span>
               </span>
             )}
           </div>
@@ -409,10 +423,10 @@ function LandingView({ onSubmit, isMobile }: {
       <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 32, width: '100%' }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
           <h2 style={{ margin: 0, fontSize: isMobile ? 24 : 32, fontWeight: 800, letterSpacing: '-0.04em', color: 'var(--text)', textAlign: 'center' }}>
-            Visualise your <span style={{ color: 'var(--accent)' }}>openings</span>
+            Map out your <span style={{ color: 'var(--accent)' }}>openings</span>
           </h2>
           <p style={{ margin: 0, fontSize: 14, color: 'var(--text-muted)', textAlign: 'center', fontWeight: 400 }}>
-            Explore your most-played openings as white and black
+            Visualise your most-played openings as white and black
           </p>
         </div>
         <UserForm onSubmit={onSubmit} isMobile={isMobile} />

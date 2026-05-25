@@ -1,17 +1,18 @@
 import { Chessboard } from 'react-chessboard';
 import type { Color } from '../types';
-import { MoveArrow } from './MoveArrow';
+import { MoveArrow, BestMoveArrow } from './MoveArrow';
 
 interface Props {
   fen: string;
   size: number;
   containerSize: number;
   orientation: Color;
-  hoverSan?: string | null;   // SAN of hovered arc move
-  hoverFromFen?: string;      // FEN *before* that move (the focus position FEN)
+  hoverSan?: string | null;
+  hoverFromFen?: string;
+  bestMoveUci?: string | null;  // UCI best move for the focus position e.g. "e2e4"
 }
 
-export function CenterBoard({ fen, size, containerSize, orientation, hoverSan, hoverFromFen }: Props) {
+export function CenterBoard({ fen, size, containerSize, orientation, hoverSan, hoverFromFen, bestMoveUci }: Props) {
   const pct = ((size / containerSize) * 100).toFixed(4) + '%';
   return (
     <div
@@ -43,6 +44,13 @@ export function CenterBoard({ fen, size, containerSize, orientation, hoverSan, h
         <MoveArrow
           fromFen={hoverFromFen}
           san={hoverSan}
+          boardSize={size}
+          orientation={orientation}
+        />
+      )}
+      {!hoverSan && bestMoveUci && (
+        <BestMoveArrow
+          uci={bestMoveUci}
           boardSize={size}
           orientation={orientation}
         />

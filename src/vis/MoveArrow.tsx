@@ -24,6 +24,56 @@ function squareCenter(square: string, boardSize: number, orientation: 'white' | 
   return [col * sq + sq / 2, row * sq + sq / 2];
 }
 
+interface UciProps {
+  uci: string;           // UCI move e.g. "e2e4"
+  boardSize: number;
+  orientation: 'white' | 'black';
+  color?: string;
+  opacity?: number;
+}
+
+export function BestMoveArrow({ uci, boardSize, orientation, color = '#f0c040', opacity = 0.7 }: UciProps) {
+  const from = uci.slice(0, 2);
+  const to = uci.slice(2, 4);
+  return <ArrowShape from={from} to={to} boardSize={boardSize} orientation={orientation} color={color} opacity={opacity} />;
+}
+
+function ArrowShape({ from, to, boardSize, orientation, color, opacity }: {
+  from: string; to: string; boardSize: number; orientation: 'white' | 'black'; color: string; opacity: number;
+}) {
+  const [x1, y1] = squareCenter(from, boardSize, orientation);
+  const [x2, y2] = squareCenter(to, boardSize, orientation);
+
+  const sq = boardSize / 8;
+  const headLen = sq * 0.38;
+  const shaftWidth = sq * 0.18;
+  const headWidth = sq * 0.38;
+  const dx = x2 - x1, dy = y2 - y1;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  if (len < 1) return null;
+  const ux = dx / len, uy = dy / len;
+  const px = -uy, py = ux;
+  const sx = x1 + ux * sq * 0.25, sy = y1 + uy * sq * 0.25;
+  const headBaseX = x2 - ux * headLen, headBaseY = y2 - uy * headLen;
+
+  const points = [
+    [sx + px * shaftWidth / 2, sy + py * shaftWidth / 2],
+    [headBaseX + px * shaftWidth / 2, headBaseY + py * shaftWidth / 2],
+    [headBaseX + px * headWidth / 2, headBaseY + py * headWidth / 2],
+    [x2, y2],
+    [headBaseX - px * headWidth / 2, headBaseY - py * headWidth / 2],
+    [headBaseX - px * shaftWidth / 2, headBaseY - py * shaftWidth / 2],
+    [sx - px * shaftWidth / 2, sy - py * shaftWidth / 2],
+  ].map((p) => p.join(',')).join(' ');
+
+  return (
+    <svg width={boardSize} height={boardSize} viewBox={`0 0 ${boardSize} ${boardSize}`}
+      style={{ position: 'absolute', inset: 0, pointerEvents: 'none', width: '100%', height: '100%' }}>
+      <polygon points={points} fill={color} fillOpacity={opacity} stroke="rgba(0,0,0,0.25)" strokeWidth={1} strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 export function MoveArrow({ fromFen, san, boardSize, orientation }: Props) {
   // Resolve from/to squares via chess.js
   let from: string, to: string;
@@ -37,65 +87,5 @@ export function MoveArrow({ fromFen, san, boardSize, orientation }: Props) {
     return null;
   }
 
-  const [x1, y1] = squareCenter(from, boardSize, orientation);
-  const [x2, y2] = squareCenter(to, boardSize, orientation);
-
-  const sq = boardSize / 8;
-  const headLen = sq * 0.38;
-  const shaftWidth = sq * 0.18;
-  const headWidth = sq * 0.38;
-
-  // Vector from → to
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  const len = Math.sqrt(dx * dx + dy * dy);
-  if (len < 1) return null;
-  const ux = dx / len;
-  const uy = dy / len;
-
-  // Shaft ends slightly before the arrowhead base, starts slightly inside source square
-  const startOffset = sq * 0.25;
-  const sx = x1 + ux * startOffset;
-  const sy = y1 + uy * startOffset;
-  const headBaseX = x2 - ux * headLen;
-  const headBaseY = y2 - uy * headLen;
-
-  // Perpendicular
-  const px = -uy;
-  const py = ux;
-
-  // Shaft polygon points
-  const shaftPoints = [
-    [sx + px * shaftWidth / 2, sy + py * shaftWidth / 2],
-    [headBaseX + px * shaftWidth / 2, headBaseY + py * shaftWidth / 2],
-    [headBaseX + px * headWidth / 2, headBaseY + py * headWidth / 2],
-    [x2, y2],
-    [headBaseX - px * headWidth / 2, headBaseY - py * headWidth / 2],
-    [headBaseX - px * shaftWidth / 2, headBaseY - py * shaftWidth / 2],
-    [sx - px * shaftWidth / 2, sy - py * shaftWidth / 2],
-  ].map((p) => p.join(',')).join(' ');
-
-  return (
-    <svg
-      width={boardSize}
-      height={boardSize}
-      viewBox={`0 0 ${boardSize} ${boardSize}`}
-      style={{
-        position: 'absolute',
-        inset: 0,
-        pointerEvents: 'none',
-        width: '100%',
-        height: '100%',
-      }}
-    >
-      <polygon
-        points={shaftPoints}
-        fill="#888"
-        fillOpacity={0.5}
-        stroke="rgba(0,0,0,0.2)"
-        strokeWidth={1}
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
+  return <ArrowShape from={from} to={to} boardSize={boardSize} orientation={orientation} color="#888" opacity={0.5} />;
 }

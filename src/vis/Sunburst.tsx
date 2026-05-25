@@ -21,7 +21,8 @@ import { colorForLocalPath, winRate } from './colorScale';
 import { CenterBoard } from './CenterBoard';
 import { Tooltip } from './Tooltip';
 import { EvalBar } from './EvalBar';
-import { useEvalCache, formatEval } from '../hooks/useCloudEval';
+import { formatEval } from '../hooks/useCloudEval';
+import { useStockfish } from '../hooks/useStockfish';
 import { drawBoardOnCanvas } from './boardToCanvas';
 import { ArrowLeft, ArrowLeftFromLine } from 'lucide-react';
 
@@ -71,16 +72,20 @@ export function Sunburst({
     y: number;
   } | null>(null);
   const [mobileInfo, setMobileInfo] = useState<SerializedNode | null>(null);
-  const evalCache = useEvalCache(rootData);
+  const stockfish = useStockfish();
+  const evalCache = {
+    onHover: (fen: string) => { void stockfish.enqueue(fen); },
+    onLeave: () => {},
+    getEval: (fen: string) => stockfish.getPositionEval(fen)?.eval,
+  };
 
   // Remember the last child entered at each depth so → can re-enter it.
   const forwardHistoryRef = useRef<string[]>([]);
 
-  // Pre-fetch eval for the focus position (the board centre).
+  // Fetch eval for the current focus position.
   useEffect(() => {
     const fen = rootData.fen || STARTING_FEN;
-    evalCache.onHover(fen);
-    return () => evalCache.onLeave();
+    void stockfish.enqueue(fen);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rootData.fen]);
 
@@ -398,6 +403,32 @@ export function Sunburst({
   const focusFen = rootData.fen || STARTING_FEN;
   focusFenRef.current = focusFen;
   const focusEval = evalCache.getEval(focusFen);
+  const focusPositionEval = stockfish.getPositionEval(focusFen);
+
+  // Only show the best-move arrow if it's ≥50cp better than all played children.
+  const focusBestMove = (() => {
+    const bm = focusPositionEval?.bestMove;
+    if (!bm) return null;
+    // Collect evals for all first-ring children (moves played in games).
+    const childEvals = rootData.children
+      .map((c) => stockfish.getPositionEval(c.fen)?.eval)
+      .filter((e): e is NonNullable<typeof e> => e !== undefined && e !== null);
+    // Need at least one child eval to make the comparison.
+    if (childEvals.length === 0) return null;
+    const toCp = (e: NonNullable<typeof childEvals[0]>) =>
+      e.type === 'mate' ? (e.value > 0 ? 10000 : -10000) : e.value;
+    // From white's POV: best child eval is the max (white prefers higher).
+    // If it's black's turn, white prefers lower — we flip sign.
+    const sideToMove = focusFen.split(' ')[1];
+    const sign = sideToMove === 'w' ? 1 : -1;
+    const bestChildCp = Math.max(...childEvals.map((e) => sign * toCp(e)));
+    const focusCp = focusEval ? sign * toCp(focusEval) : null;
+    if (focusCp === null) return null;
+    // The best move is "better" if remaining eval stays close to focusCp,
+    // but all played children drop ≥50cp below it.
+    if (focusCp - bestChildCp >= 50) return bm;
+    return null;
+  })();
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', width: '100%' }}>
@@ -489,6 +520,7 @@ export function Sunburst({
         orientation={color}
         hoverSan={hover?.node.san ?? null}
         hoverFromFen={focusFen}
+        bestMoveUci={focusBestMove}
       />
 
       <Tooltip

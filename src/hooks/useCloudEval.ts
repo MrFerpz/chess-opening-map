@@ -8,47 +8,43 @@ export type EvalResult =
 // Module-level cache shared across renders.
 const cache = new Map<string, EvalResult | null>();
 
-// Sentinel: fetch failed transiently (rate limit, network error) — don't cache.
-const TRANSIENT = Symbol('transient');
+// Track in-flight fetches so concurrent callers don't double-fetch the same FEN.
+const inflight = new Set<string>();
 
-// Fetch a single FEN from Lichess cloud eval.
-// Returns null if genuinely not found (404), TRANSIENT if we should retry.
-async function fetchCloud(fen: string, signal?: AbortSignal): Promise<EvalResult | null | typeof TRANSIENT> {
-  try {
-    const r = await fetch(
-      `https://lichess.org/api/cloud-eval?fen=${encodeURIComponent(fen)}&multiPv=1`,
-      { signal },
-    );
-    if (r.status === 404) return null; // position not in DB — definitive
-    if (!r.ok) return TRANSIENT;       // 429 rate limit or other transient error
-    const data = await r.json();
-    if (!data?.pvs?.length) return null;
-    const pv = data.pvs[0];
-    if (pv.cp !== undefined) return { type: 'cp', value: pv.cp };
-    if (pv.mate !== undefined) return { type: 'mate', value: pv.mate };
-    return null;
-  } catch {
-    return TRANSIENT;
-  }
-}
+const sleep = (ms: number) => new Promise<void>((res) => setTimeout(res, ms));
 
-// Walk tree BFS, collect top-N children by count at each node up to maxDepth rings.
-function topFens(root: SerializedNode, topN: number, maxDepth: number): string[] {
-  const fens: string[] = [];
-  const queue: { node: SerializedNode; depth: number }[] = [{ node: root, depth: 0 }];
-  while (queue.length > 0) {
-    const { node, depth } = queue.shift()!;
-    if (depth >= maxDepth) continue;
-    const sorted = [...node.children].sort((a, b) => b.count - a.count);
-    for (const child of sorted.slice(0, topN)) {
-      if (child.fen) fens.push(child.fen);
-      queue.push({ node: child, depth: depth + 1 });
+// Fetch a single FEN from Lichess cloud eval with exponential backoff on 429.
+// Returns null if genuinely not found, or after retries are exhausted.
+async function fetchCloud(fen: string, signal?: AbortSignal): Promise<EvalResult | null> {
+  const delays = [0, 1000, 2000, 4000];
+  for (const delay of delays) {
+    if (signal?.aborted) return null;
+    if (delay > 0) await sleep(delay);
+    if (signal?.aborted) return null;
+    try {
+      const timeout = AbortSignal.timeout(5000);
+      const combined = signal ? AbortSignal.any([signal, timeout]) : timeout;
+      const r = await fetch(
+        `https://lichess.org/api/cloud-eval?fen=${encodeURIComponent(fen)}&multiPv=1`,
+        { signal: combined },
+      );
+      if (r.status === 404) return null;
+      if (r.status === 429) continue; // retry after backoff
+      if (!r.ok) return null;
+      const data = await r.json();
+      if (!data?.pvs?.length) return null;
+      const pv = data.pvs[0];
+      if (pv.cp !== undefined) return { type: 'cp', value: pv.cp };
+      if (pv.mate !== undefined) return { type: 'mate', value: pv.mate };
+      return null;
+    } catch {
+      return null; // aborted or network error — give up
     }
   }
-  return [...new Set(fens)];
+  return null; // exhausted retries
 }
 
-export function useEvalCache(root: SerializedNode | null) {
+export function useEvalCache(_root: SerializedNode | null) {
   // Map from FEN → eval (undefined = not yet fetched, null = unavailable).
   const [evals, setEvals] = useState<Map<string, EvalResult | null>>(new Map());
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -64,55 +60,20 @@ export function useEvalCache(root: SerializedNode | null) {
     });
   }, []);
 
-  // Pre-fetch top-2 lines at each ring whenever rootData changes.
-  useEffect(() => {
-    if (!root) return;
-    const fens = topFens(root, 2, 6);
-    const uncached = fens.filter((f) => !cache.has(f));
-    if (uncached.length === 0) return;
-
-    // Seed state with already-cached values immediately.
-    const known = fens.filter((f) => cache.has(f));
-    if (known.length > 0) {
-      setEvals((prev) => {
-        const next = new Map(prev);
-        for (const f of known) next.set(f, cache.get(f)!);
-        return next;
-      });
-    }
-
-    // Fetch uncached ones sequentially (avoid hammering the API).
-    let cancelled = false;
-    (async () => {
-      for (const fen of uncached) {
-        if (cancelled) break;
-        if (cache.has(fen)) continue;
-        const result = await fetchCloud(fen);
-        if (!cancelled && result !== TRANSIENT) store(fen, result);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [root, store]);
-
   // Debounced hover: fetch after 400ms pause, cancel on leave.
   const onHover = useCallback((fen: string) => {
     if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
-    if (cache.has(fen)) return; // already have it
+    if (cache.has(fen) || inflight.has(fen)) return;
     hoverTimerRef.current = setTimeout(async () => {
-      if (cache.has(fen)) return;
+      if (cache.has(fen) || inflight.has(fen)) return;
       hoverAbortRef.current?.abort();
       const ctrl = new AbortController();
       hoverAbortRef.current = ctrl;
+      inflight.add(fen);
       const result = await fetchCloud(fen, ctrl.signal);
-      if (result !== TRANSIENT) store(fen, result);
-    }, 400);
-  }, [store]);
-
-  // Immediate fetch with no debounce — for pre-fetching known positions.
-  const prefetch = useCallback(async (fen: string) => {
-    if (cache.has(fen)) return;
-    const result = await fetchCloud(fen);
-    if (result !== TRANSIENT) store(fen, result);
+      inflight.delete(fen);
+      if (!ctrl.signal.aborted) store(fen, result);
+    }, 200);
   }, [store]);
 
   const onLeave = useCallback(() => {
@@ -126,7 +87,7 @@ export function useEvalCache(root: SerializedNode | null) {
     return undefined; // not fetched yet
   }, [evals]);
 
-  return { getEval, onHover, onLeave, prefetch };
+  return { getEval, onHover, onLeave };
 }
 
 export function formatEval(e: EvalResult): string {
