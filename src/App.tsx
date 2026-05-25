@@ -390,40 +390,6 @@ function App() {
                       openingName={openingName?.name ?? null}
                       onTopLinesChange={setNarrowTopLines}
                     />
-                    {/* Top lines below the chart on mobile */}
-                    {isMobile && (
-                      <div style={{ padding: '0 8px', display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
-                        {narrowTopLines.length > 0 && (
-                          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 5 }}>
-                            <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-dim)', marginBottom: 2 }}>
-                              Top Lines
-                            </span>
-                            {narrowTopLines.map((line, i) => {
-                              const lTotal = line.wins + line.draws + line.losses;
-                              const winPct = lTotal > 0 ? (line.wins / lTotal) * 100 : 0;
-                              const drawPct = lTotal > 0 ? (line.draws / lTotal) * 100 : 0;
-                              const lossPct = lTotal > 0 ? (line.losses / lTotal) * 100 : 0;
-                              const wrPct = lTotal > 0 ? Math.round((line.wins + 0.5 * line.draws) / lTotal * 100) : 0;
-                              const wrColor = wrPct >= 55 ? 'var(--win)' : wrPct <= 45 ? 'var(--loss)' : 'var(--text-dim)';
-                              return (
-                                <div key={(line.san ?? '?') + i} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, fontSize: 11 }}>
-                                    <span style={{ fontWeight: 700, color: 'var(--text)', flexShrink: 0 }}>{line.san ?? '—'}</span>
-                                    <span style={{ color: 'var(--text-muted)', flex: 1, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{line.count.toLocaleString()}</span>
-                                    <span style={{ color: wrColor, fontVariantNumeric: 'tabular-nums', minWidth: 30, textAlign: 'right', fontWeight: 600 }}>{wrPct}%</span>
-                                  </div>
-                                  <div style={{ display: 'flex', height: 5, width: '100%', borderRadius: 2, overflow: 'hidden', background: 'var(--surface)' }}>
-                                    <div style={{ width: `${winPct}%`, background: 'var(--win)' }} />
-                                    <div style={{ width: `${drawPct}%`, background: 'var(--text-dim)' }} />
-                                    <div style={{ width: `${lossPct}%`, background: 'var(--loss)' }} />
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )}
                   </div>
                 </>
               ) : sync.status === 'done' ? (
