@@ -13,7 +13,7 @@ import { useAggregator, EMPTY_ROOT } from './hooks/useAggregator';
 import type { SerializedNode } from './types';
 import { useGameSync } from './hooks/useGameSync';
 import { useOpeningName } from './hooks/useOpeningName';
-import { clearUser } from './store/cache';
+import { clearUser, findGameByMoves } from './store/cache';
 import { encodeShareUrl, decodeShareUrl } from './lib/shareUrl';
 
 interface Session {
@@ -54,6 +54,7 @@ function App() {
   const [focusPath, setFocusPath] = useState<string[]>(() => decodeShareUrl()?.focusPath ?? []);
   const [reloadCount, setReloadCount] = useState(0);
   const [copyLabel, setCopyLabel] = useState<'Copy link' | 'Copied!'>('Copy link');
+  const [fullGameMoves, setFullGameMoves] = useState<string[] | null>(null);
   const sunburstRef = useRef<SunburstHandle>(null);
 
   const request: SnapshotRequest = useMemo(
@@ -109,6 +110,14 @@ function App() {
   const root = snapshot?.root ?? EMPTY_ROOT;
   const total = snapshot?.totalGames ?? 0;
   const openingName = useOpeningName(focusPath);
+
+  useEffect(() => {
+    setFullGameMoves(null);
+    if (!session || total !== 1) return;
+    void findGameByMoves(session.platform, session.username, focusPath).then((game) => {
+      if (game) setFullGameMoves(game.moves);
+    });
+  }, [session, total, focusPath]);
 
   return (
     <div style={{ minHeight: '100vh', color: 'var(--text)', display: 'flex', flexDirection: 'column' }}>
@@ -281,7 +290,11 @@ function App() {
               {sync.status === 'done' && total === 1 ? (
                 <GameReplay
                   focusPath={focusPath}
-                  remainingMoves={extractRemainingMoves(root)}
+                  remainingMoves={
+                    fullGameMoves
+                      ? fullGameMoves.slice(focusPath.length)
+                      : extractRemainingMoves(root)
+                  }
                   orientation={color}
                   onBack={() => setFocusPath(focusPath.slice(0, -1))}
                   onBackToChart={() => setFocusPath([])}

@@ -78,3 +78,16 @@ export async function cachedUserCount(): Promise<number> {
   const db = await getDb();
   return db.count('syncMeta');
 }
+
+export async function findGameByMoves(
+  platform: Platform,
+  username: string,
+  movePrefix: string[],
+): Promise<CachedGameRow | undefined> {
+  const db = await getDb();
+  const cacheKey = makeCacheKey(platform, username);
+  const all = await db.getAllFromIndex('games', 'by-cacheKey', cacheKey);
+  return all.find((g) =>
+    movePrefix.every((san, i) => g.moves[i] === san),
+  );
+}

@@ -3,7 +3,6 @@ import type { Color, SerializedNode } from '../types';
 import { STARTING_FEN } from '../types';
 import {
   buildHierarchy,
-  collapsedAtCentre,
   easeInOut,
   HOLE_UNITS,
   labelTransform,
@@ -102,6 +101,7 @@ export function Sunburst({
   const focusFenRef = useRef<string>(STARTING_FEN);
   const colorRef = useRef<Color>(color);
   colorRef.current = color;
+  const lastMousePos = useRef<{ x: number; y: number } | null>(null);
 
   useImperativeHandle(exportRef, () => ({
     exportPng: async (filename = 'chess-openings.png') => {
@@ -276,6 +276,28 @@ export function Sunburst({
     prevFocusPathRef.current = focusPath;
     ensureRafRunning();
 
+    // After a focus change, re-derive hover from wherever the cursor currently is.
+    if (!sameFocus && lastMousePos.current) {
+      const { x, y } = lastMousePos.current;
+      const el = document.elementFromPoint(x, y);
+      const pathEl = el?.closest?.('path');
+      if (pathEl) {
+        // Find the node whose path element this is.
+        for (const [key, ref] of pathRefsRef.current) {
+          if (ref === pathEl) {
+            const node = nodes.find((n) => pathKey(n) === key);
+            if (node) {
+              setHover({ node: node.data, x, y });
+              evalCache.onHover(node.data.fen);
+            }
+            break;
+          }
+        }
+      } else {
+        setHover(null);
+      }
+    }
+
     return () => {
       if (rafRef.current != null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
     };
@@ -317,7 +339,8 @@ export function Sunburst({
         height={size}
         viewBox={`${-radius} ${-radius} ${size} ${size}`}
         style={{ display: 'block', userSelect: 'none' }}
-        onMouseLeave={() => setHover(null)}
+        onMouseMove={(ev) => { lastMousePos.current = { x: ev.clientX, y: ev.clientY }; }}
+        onMouseLeave={() => { lastMousePos.current = null; setHover(null); }}
       >
         {/* Background disc */}
         <circle r={radius} fill="#13161f" />
