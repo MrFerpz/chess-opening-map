@@ -327,13 +327,10 @@ function App() {
       </main>
 
       <footer style={footerStyle}>
-        <div style={{ marginBottom: 8 }}>
-          <a href="https://gooseworks.io/" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, opacity: 0.5, transition: 'opacity 0.15s' }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.opacity = '0.85'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.opacity = '0.5'; }}>
-            <img src="/GooseworksLogoWhite.webp" alt="Gooseworks" className="gooseworks-logo" style={{ height: 108, width: 'auto' }} />
-          </a>
-        </div>
+        <a href="https://gooseworks.io/" target="_blank" rel="noopener noreferrer" className="gooseworks-link">
+          <img src="/GooseworksLogoWhite.webp" alt="Gooseworks" className="gooseworks-logo" />
+        </a>
+        <span className="footer-sep">·</span>
         <span>
           Data from{' '}
           <a href="https://www.chess.com/news/view/published-data-api" target="_blank" rel="noopener noreferrer" style={footerLinkStyle}>Chess.com API</a>
@@ -342,7 +339,10 @@ function App() {
           {' '}· Opening names from{' '}
           <a href="https://github.com/lichess-org/chess-openings" target="_blank" rel="noopener noreferrer" style={footerLinkStyle}>lichess-org/chess-openings</a>
           {' '}· Inspired by{' '}
+          <a href="https://www.openingtree.com/" target="_blank" rel="noopener noreferrer" style={footerLinkStyle}>OpeningTree</a>
+          {' '}and{' '}
           <a href="https://blog.ebemunk.com/a-visual-look-at-2-million-chess-games/" target="_blank" rel="noopener noreferrer" style={footerLinkStyle}>@ebemunk</a>
+          {' '}data visualisations
           {' '}· Built with{' '}
           <a href="https://github.com/jhlywa/chess.js" target="_blank" rel="noopener noreferrer" style={footerLinkStyle}>chess.js</a>
           {' '}and{' '}
@@ -356,10 +356,12 @@ function App() {
         .platform-btn:hover { border-color: var(--border-hover) !important; }
         .platform-btn.selected:hover { border-color: var(--accent-hover) !important; }
         footer a:hover { color: var(--text-muted) !important; }
-        .gooseworks-logo { height: 108px; width: auto; }
+        .gooseworks-logo { height: 64px; width: auto; opacity: 0.5; transition: opacity 0.15s; }
+        .gooseworks-link:hover .gooseworks-logo { opacity: 0.85; }
+        .footer-sep { margin: 0 6px; color: var(--text-dim); }
         @media (max-width: 767px) {
-          .gooseworks-logo { height: 72px; }
-          footer { padding: 12px 16px !important; font-size: 10px !important; }
+          .footer-sep { display: none; }
+          footer { flex-direction: column !important; gap: 8px !important; padding: 12px 16px !important; font-size: 10px !important; }
         }
       `}</style>
     </div>
@@ -514,7 +516,11 @@ const statusCardStyle: React.CSSProperties = {
 const footerStyle: React.CSSProperties = {
   borderTop: '1px solid var(--border)',
   padding: '12px 24px',
-  textAlign: 'center',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  flexWrap: 'wrap',
+  gap: 4,
   fontSize: 11,
   color: 'var(--text-dim)',
   lineHeight: 1.6,

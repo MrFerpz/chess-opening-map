@@ -23,6 +23,7 @@ import { Tooltip } from './Tooltip';
 import { EvalBar } from './EvalBar';
 import { useEvalCache, formatEval } from '../hooks/useCloudEval';
 import { drawBoardOnCanvas } from './boardToCanvas';
+import { ArrowLeft, ArrowLeftFromLine } from 'lucide-react';
 
 export interface SunburstHandle {
   exportPng: (filename?: string) => Promise<void>;
@@ -71,6 +72,9 @@ export function Sunburst({
   } | null>(null);
   const [mobileInfo, setMobileInfo] = useState<SerializedNode | null>(null);
   const evalCache = useEvalCache(rootData);
+
+  // Remember the last child entered at each depth so → can re-enter it.
+  const forwardHistoryRef = useRef<string[]>([]);
 
   // Pre-fetch eval for the focus position (the board centre).
   useEffect(() => {
@@ -346,19 +350,41 @@ export function Sunburst({
       setMobileInfo(n.data);
       evalCache.onHover(n.data.fen);
     }
+    forwardHistoryRef.current = [];
     onFocusChange([...focusPath, ...local]);
   };
 
   const handleZoomOut = () => {
     if (focusPath.length === 0) return;
     if (isMobile) setMobileInfo(null);
+    forwardHistoryRef.current = [focusPath[focusPath.length - 1], ...forwardHistoryRef.current];
     onFocusChange(focusPath.slice(0, -1));
+  };
+
+  const handleZoomForward = () => {
+    const next = forwardHistoryRef.current[0];
+    if (!next) return;
+    if (isMobile) setMobileInfo(null);
+    forwardHistoryRef.current = forwardHistoryRef.current.slice(1);
+    onFocusChange([...focusPath, next]);
   };
 
   const handleReset = () => {
     if (isMobile) setMobileInfo(null);
+    forwardHistoryRef.current = [];
     onFocusChange([]);
   };
+
+  // Keyboard arrow navigation.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') { e.preventDefault(); handleZoomOut(); }
+      if (e.key === 'ArrowRight') { e.preventDefault(); handleZoomForward(); }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusPath]);
 
   // ─── Initial render — stable SVG skeleton ────────────────────────────────
   // React renders <path> / <text> elements once per node set change.
@@ -475,27 +501,10 @@ export function Sunburst({
       />
 
       {focusPath.length > 0 && (
-        <button
-          type="button"
-          onClick={handleReset}
-          className="header-btn"
-          style={{
-            position: 'absolute',
-            left: 12,
-            top: 12,
-            background: 'rgba(19,22,31,0.9)',
-            color: '#c8cad8',
-            border: '1px solid #252836',
-            padding: '5px 12px',
-            borderRadius: 6,
-            cursor: 'pointer',
-            fontSize: 12,
-            fontFamily: 'inherit',
-            fontWeight: 500,
-          }}
-        >
-          ← Reset zoom
-        </button>
+        <div style={{ position: 'absolute', left: 12, top: 12, display: 'flex', gap: 10 }}>
+          <ArrowLeft size={20} style={{ cursor: 'pointer', color: '#c8cad8', opacity: 0.8 }} onClick={handleZoomOut} title="Back one move" />
+          <ArrowLeftFromLine size={20} style={{ cursor: 'pointer', color: '#c8cad8', opacity: 0.8 }} onClick={handleReset} title="Reset to start" />
+        </div>
       )}
     </div>
     {!isMobile && <EvalBar eval_={focusEval} height={size * 0.7} />}
