@@ -306,7 +306,7 @@ function App() {
               {(sync.status === 'fetching' || sync.status === 'loading-cache') && (
                 <div style={statusCardStyle}>
                   <Spinner />
-                  <span style={{ color: 'var(--text-muted)', fontSize: 12, flex: 1 }}>
+                  <span style={{ color: 'var(--text)', fontSize: 13, flex: 1 }}>
                     {sync.status === 'loading-cache'
                       ? 'Loading cached games…'
                       : `Fetching… ${sync.fetched}${sync.fromCache ? ` (+${sync.fromCache} cached)` : ''}`}

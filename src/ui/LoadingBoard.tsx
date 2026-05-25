@@ -249,7 +249,7 @@ export function LoadingBoard({ state, isMobile }: Props) {
             {FACTS[factIndex]}
           </div>
         </div>
-        <div style={{ color: '#555', font: '12px system-ui' }}>
+        <div style={{ color: 'var(--text-muted)', font: '700 14px system-ui' }}>
           {statusLabel}
         </div>
       </div>
