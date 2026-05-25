@@ -50,6 +50,9 @@ export function useStockfish() {
 
     const fen = next.fen;
     const resolve = next.resolve;
+    // Stockfish scores are always from the side-to-move's perspective; convert to white POV.
+    const sideToMove = fen.split(' ')[1];
+    const toWhitePov = sideToMove === 'b' ? -1 : 1;
 
     // Attach a one-shot message handler for this evaluation.
     const handler = (e: MessageEvent<string>) => {
@@ -60,8 +63,8 @@ export function useStockfish() {
         const cpMatch = line.match(/\bscore cp (-?\d+)/);
         const pvMatch = line.match(/\bpv (\S+)/);
         let ev: EvalResult | null = null;
-        if (mateMatch) ev = { type: 'mate', value: parseInt(mateMatch[1]) };
-        else if (cpMatch) ev = { type: 'cp', value: parseInt(cpMatch[1]) };
+        if (mateMatch) ev = { type: 'mate', value: parseInt(mateMatch[1]) * toWhitePov };
+        else if (cpMatch) ev = { type: 'cp', value: parseInt(cpMatch[1]) * toWhitePov };
         if (ev) latestInfoRef.current = { eval: ev, bestMove: pvMatch?.[1] ?? null };
       }
 

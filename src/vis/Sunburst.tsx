@@ -17,11 +17,11 @@ import {
   type Rect,
   type SunburstNode,
 } from './sunburstLayout';
-import { colorForLocalPath } from './colorScale';
+import { colorForLocalPath, winRate } from './colorScale';
 import { CenterBoard } from './CenterBoard';
 import { Tooltip } from './Tooltip';
 import { EvalBar } from './EvalBar';
-import { useEvalCache } from '../hooks/useCloudEval';
+import { useEvalCache, formatEval } from '../hooks/useCloudEval';
 import { drawBoardOnCanvas } from './boardToCanvas';
 
 export interface SunburstHandle {
@@ -36,6 +36,9 @@ interface Props {
   onFocusChange: (newPath: string[]) => void;
   size?: number;
   exportRef?: React.Ref<SunburstHandle>;
+  isMobile?: boolean;
+  visibleRings?: number;
+  holeUnits?: number;
 }
 
 const ANIM_MS = 350;
@@ -55,12 +58,18 @@ export function Sunburst({
   onFocusChange,
   size = 720,
   exportRef,
+  isMobile,
+  visibleRings: visibleRingsProp,
+  holeUnits: holeUnitsProp,
 }: Props) {
+  const visibleRings = visibleRingsProp ?? VISIBLE_RINGS;
+  const holeUnits = holeUnitsProp ?? HOLE_UNITS;
   const [hover, setHover] = useState<{
     node: SerializedNode;
     x: number;
     y: number;
   } | null>(null);
+  const [mobileInfo, setMobileInfo] = useState<SerializedNode | null>(null);
   const evalCache = useEvalCache(rootData);
 
   // Pre-fetch eval for the focus position (the board centre).
@@ -72,9 +81,9 @@ export function Sunburst({
   }, [rootData.fen]);
 
   const radius = size / 2;
-  const ringRadius = radius / (HOLE_UNITS + VISIBLE_RINGS);
-  const holeRadius = ringRadius * HOLE_UNITS;
-  const boardSize = Math.floor(holeRadius * Math.SQRT2 * 1.0);
+  const ringRadius = radius / (holeUnits + visibleRings);
+  const holeRadius = ringRadius * holeUnits;
+  const boardSize = Math.floor(holeRadius * Math.SQRT2);
 
   const arcGen = useMemo(() => makeArc(ringRadius), [ringRadius]);
 
@@ -230,9 +239,9 @@ export function Sunburst({
       justZoomedRef.current = false;
 
       for (const n of nodes) {
-        if (n.depth === 0 || n.depth > VISIBLE_RINGS) continue;
+        if (n.depth === 0 || n.depth > visibleRings) continue;
         const key = pathKey(n);
-        const newTarget = targetFor(n);
+        const newTarget = targetFor(n, visibleRings, holeUnits);
         if (snapAll) {
           animMap.current.set(key, { start: newTarget, target: newTarget, startedAt: now });
         } else {
@@ -261,9 +270,9 @@ export function Sunburst({
       if (isFocusChange) justZoomedRef.current = true;
 
       for (const n of nodes) {
-        if (n.depth === 0 || n.depth > VISIBLE_RINGS) continue;
+        if (n.depth === 0 || n.depth > visibleRings) continue;
         const key = pathKey(n);
-        const tgt = targetFor(n);
+        const tgt = targetFor(n, visibleRings, holeUnits);
 
         if (isFocusChange) {
           // Snap immediately — no animation on zoom.
@@ -310,8 +319,8 @@ export function Sunburst({
     if (angle < 0) angle += 2 * Math.PI;
 
     const hit = nodes.find((n) => {
-      if (n.depth === 0 || n.depth > VISIBLE_RINGS) return false;
-      const tgt = targetFor(n);
+      if (n.depth === 0 || n.depth > visibleRings) return false;
+      const tgt = targetFor(n, visibleRings, holeUnits);
       if (yUnit < tgt.y0 || yUnit >= tgt.y1) return false;
       return angle >= tgt.x0 && angle < tgt.x1;
     });
@@ -328,22 +337,30 @@ export function Sunburst({
   const handleClickArc = (n: SunburstNode) => {
     const local = localPath(n);
     if (local.length === 0) return;
+    if (isMobile) {
+      setMobileInfo(n.data);
+      evalCache.onHover(n.data.fen);
+    }
     onFocusChange([...focusPath, ...local]);
   };
 
   const handleZoomOut = () => {
     if (focusPath.length === 0) return;
+    if (isMobile) setMobileInfo(null);
     onFocusChange(focusPath.slice(0, -1));
   };
 
-  const handleReset = () => onFocusChange([]);
+  const handleReset = () => {
+    if (isMobile) setMobileInfo(null);
+    onFocusChange([]);
+  };
 
   // ─── Initial render — stable SVG skeleton ────────────────────────────────
   // React renders <path> / <text> elements once per node set change.
   // The rAF loop mutates their attributes directly; React never touches them again
   // during animation. We use callback refs to register DOM elements.
   const renderableNodes = useMemo(
-    () => nodes.filter((n) => n.depth > 0 && n.depth <= VISIBLE_RINGS),
+    () => nodes.filter((n) => n.depth > 0 && n.depth <= visibleRings),
     [nodes],
   );
 
@@ -352,14 +369,15 @@ export function Sunburst({
   const focusEval = evalCache.getEval(focusFen);
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-    <div ref={containerRef} style={{ position: 'relative', width: size, height: size, margin: '0 auto' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', width: '100%' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14, width: '100%', overflow: 'hidden' }}>
+    <div ref={containerRef} style={{ position: 'relative', width: '100%', maxWidth: size, height: 'auto', aspectRatio: '1 / 1', margin: '0 auto', overflow: 'hidden' }}>
       <svg
         ref={svgRef}
         width={size}
         height={size}
         viewBox={`${-radius} ${-radius} ${size} ${size}`}
-        style={{ display: 'block', userSelect: 'none' }}
+        style={{ display: 'block', userSelect: 'none', width: '100%', height: 'auto' }}
         onMouseMove={(ev) => { lastMousePos.current = { x: ev.clientX, y: ev.clientY }; }}
         onMouseLeave={() => { lastMousePos.current = null; setHover(null); }}
       >
@@ -435,6 +453,7 @@ export function Sunburst({
       <CenterBoard
         fen={hover?.node.fen ?? focusFen}
         size={boardSize}
+        containerSize={size}
         orientation={color}
         hoverSan={hover?.node.san ?? null}
         hoverFromFen={focusFen}
@@ -473,7 +492,80 @@ export function Sunburst({
         </button>
       )}
     </div>
-    <EvalBar eval_={focusEval} height={size * 0.7} />
+    {!isMobile && <EvalBar eval_={focusEval} height={size * 0.7} />}
+    </div>
+    {isMobile && mobileInfo && (() => {
+      const node = mobileInfo;
+      const eval_ = evalCache.getEval(node.fen);
+      const wr = Math.round(winRate(node) * 100);
+      const pct = totalGames > 0 ? Math.round((node.count / totalGames) * 100) : 0;
+      const total = node.wins + node.draws + node.losses;
+      const winPct  = total > 0 ? (node.wins  / total) * 100 : 0;
+      const drawPct = total > 0 ? (node.draws / total) * 100 : 0;
+      const lossPct = total > 0 ? (node.losses / total) * 100 : 0;
+      const evalColor =
+        eval_ == null ? 'var(--text-muted)'
+        : eval_.type === 'mate' ? '#f4d03f'
+        : eval_.value > 30 ? 'var(--win)'
+        : eval_.value < -30 ? 'var(--loss)'
+        : 'var(--text)';
+      const evalStr = eval_ === undefined ? '…' : eval_ === null ? '-' : formatEval(eval_);
+      const moveOrder = [...focusPath, node.san ?? ''].filter(Boolean);
+      return (
+        <div style={{ width: '100%', maxWidth: size, margin: '8px auto 0', boxSizing: 'border-box', padding: '0 8px' }}>
+          <div style={{
+            background: 'rgba(13,15,22,0.97)',
+            border: '1px solid var(--border)',
+            borderRadius: 8,
+            padding: '10px 14px',
+            fontSize: 12,
+            lineHeight: 1.5,
+            fontFamily: 'inherit',
+            color: 'var(--text)',
+          }}>
+            {/* Top row: left=stats, right=move order */}
+            <div style={{ display: 'flex', gap: 12, marginBottom: 7 }}>
+              <div style={{ flex: 'none' }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 4 }}>
+                  <span style={{ fontWeight: 700, fontSize: 15 }}>{node.san ?? 'Start'}</span>
+                  <span style={{ color: evalColor, fontWeight: 600, fontSize: 13 }}>{evalStr}</span>
+                </div>
+                <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+                  {node.count.toLocaleString()} games ({pct}%)
+                </div>
+              </div>
+              <div style={{ flex: 1, textAlign: 'right', color: '#444c5e', fontSize: 11, lineHeight: 1.7, paddingTop: 1 }}>
+                {moveOrder.map((san, i) => (
+                  <span key={i}>
+                    {i % 2 === 0 && <span style={{ color: '#333a4d' }}>{Math.floor(i / 2) + 1}. </span>}
+                    <span style={{ color: i === moveOrder.length - 1 ? 'var(--text-muted)' : '#444c5e' }}>{san} </span>
+                  </span>
+                ))}
+              </div>
+            </div>
+            {/* W/D/L bar — full width */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
+              <div style={{ flex: 1, borderRadius: 3, overflow: 'hidden', display: 'flex', height: 6 }}>
+                <div style={{ width: `${winPct}%`,  background: 'var(--win)',      transition: 'width 0.2s' }} />
+                <div style={{ width: `${drawPct}%`, background: 'var(--text-dim)', transition: 'width 0.2s' }} />
+                <div style={{ width: `${lossPct}%`, background: 'var(--loss)',     transition: 'width 0.2s' }} />
+              </div>
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--win)', flexShrink: 0 }}>{wr}%</span>
+            </div>
+            <div style={{ display: 'flex', gap: 10, fontSize: 11 }}>
+              <span style={{ color: 'var(--win)' }}>{node.wins.toLocaleString()}W</span>
+              <span style={{ color: 'var(--text-muted)' }}>{node.draws.toLocaleString()}D</span>
+              <span style={{ color: 'var(--loss)' }}>{node.losses.toLocaleString()}L</span>
+            </div>
+          </div>
+        </div>
+      );
+    })()}
+    {isMobile && (
+      <div style={{ width: '100%', maxWidth: size, margin: '8px auto 0', boxSizing: 'border-box', padding: '0 8px 0 8px' }}>
+        <EvalBar eval_={focusEval} height={0} horizontal hideLabel />
+      </div>
+    )}
     </div>
   );
 }

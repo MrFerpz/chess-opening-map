@@ -5,18 +5,20 @@ import { MoveArrow } from './MoveArrow';
 interface Props {
   fen: string;
   size: number;
+  containerSize: number;
   orientation: Color;
   hoverSan?: string | null;   // SAN of hovered arc move
   hoverFromFen?: string;      // FEN *before* that move (the focus position FEN)
 }
 
-export function CenterBoard({ fen, size, orientation, hoverSan, hoverFromFen }: Props) {
+export function CenterBoard({ fen, size, containerSize, orientation, hoverSan, hoverFromFen }: Props) {
+  const pct = ((size / containerSize) * 100).toFixed(4) + '%';
   return (
     <div
       data-board-wrapper=""
       style={{
-        width: size,
-        height: size,
+        width: pct,
+        height: pct,
         position: 'absolute',
         left: '50%',
         top: '50%',

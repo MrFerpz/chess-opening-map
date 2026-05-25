@@ -34,25 +34,25 @@ export function buildHierarchy(rootData: SerializedNode): SunburstNode {
 // depth 0 = focus root, collapsed in the hole.
 // depth k (1..VISIBLE_RINGS) = ring k.
 // depth > VISIBLE_RINGS = collapsed at outer edge (invisible).
-export function targetFor(node: SunburstNode): Rect {
+export function targetFor(node: SunburstNode, visibleRings = VISIBLE_RINGS, holeUnits = HOLE_UNITS): Rect {
   if (node.depth === 0) {
     return { x0: 0, x1: FULL_CIRCLE, y0: 0, y1: 0 };
   }
-  if (node.depth > VISIBLE_RINGS) {
-    const outer = HOLE_UNITS + VISIBLE_RINGS;
+  if (node.depth > visibleRings) {
+    const outer = holeUnits + visibleRings;
     return { x0: node.x0, x1: node.x1, y0: outer, y1: outer };
   }
   return {
     x0: node.x0,
     x1: node.x1,
-    y0: HOLE_UNITS + (node.depth - 1),
-    y1: HOLE_UNITS + node.depth,
+    y0: holeUnits + (node.depth - 1),
+    y1: holeUnits + node.depth,
   };
 }
 
 // "Collapsed at centre" target for first-render entry animation.
-export function collapsedAtCentre(node: SunburstNode): Rect {
-  return { x0: node.x0, x1: node.x1, y0: HOLE_UNITS, y1: HOLE_UNITS };
+export function collapsedAtCentre(node: SunburstNode, holeUnits = HOLE_UNITS): Rect {
+  return { x0: node.x0, x1: node.x1, y0: holeUnits, y1: holeUnits };
 }
 
 export function makeArc(ringRadius: number) {

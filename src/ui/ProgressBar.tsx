@@ -10,7 +10,7 @@ export function ProgressBar({ state }: Props) {
   else if (state.status === 'fetching')
     label = `Fetching… ${state.fetched} new${state.fromCache ? ` (${state.fromCache} cached)` : ''}`;
   else if (state.status === 'done')
-    label = `Done — ${state.fetched} new fetched${state.fromCache ? `, ${state.fromCache} from cache` : ''}`;
+    label = `Done: ${state.fetched} new fetched${state.fromCache ? `, ${state.fromCache} from cache` : ''}`;
   else if (state.status === 'error') label = `Error: ${state.error ?? 'unknown'}`;
   else return null;
 

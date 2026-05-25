@@ -27,7 +27,19 @@ const DEFAULT_FILTER: Filter = {
 };
 
 
+function useWindowWidth() {
+  const [width, setWidth] = useState(window.innerWidth);
+  useEffect(() => {
+    const handler = () => setWidth(window.innerWidth);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+  return width;
+}
+
 function App() {
+  const windowWidth = useWindowWidth();
+  const isMobile = windowWidth < 768;
   const [session, setSession] = useState<Session | null>(() => {
     const s = decodeShareUrl();
     return s ? { platform: s.platform, username: s.username } : null;
@@ -111,31 +123,33 @@ function App() {
         <div style={{ maxWidth: 1280, margin: '0 auto', width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <img src="/logo.webp" alt="Logo" style={{ width: 28, height: 28, objectFit: 'contain' }} />
-            <span style={{ fontWeight: 800, fontSize: 18, letterSpacing: '-0.03em', color: 'var(--text)' }}>
-              Chess Opening Visualiser
-            </span>
+            {!isMobile && (
+              <span style={{ fontWeight: 800, fontSize: 18, letterSpacing: '-0.03em', color: 'var(--text)' }}>
+                Chess Opening Visualiser
+              </span>
+            )}
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button type="button" onClick={handleRefresh} style={headerBtnStyle} className="header-btn">
-              Refresh games
+              {isMobile ? 'Refresh' : 'Refresh games'}
             </button>
             <button type="button" onClick={() => setSession(null)} style={headerBtnStyle} className="header-btn">
-              Change user
+              {isMobile ? 'Change' : 'Change user'}
             </button>
           </div>
         </div>
       </header>}
 
       {/* ── Main ── */}
-      <main style={{ flex: 1, maxWidth: 1280, margin: '0 auto', width: '100%', padding: '0 24px 40px' }}>
-        {!session && <LandingView onSubmit={(p, u) => setSession({ platform: p, username: u })} />}
+      <main style={{ flex: 1, maxWidth: 1280, margin: '0 auto', width: '100%', padding: isMobile ? '0 16px 40px' : '0 24px 40px' }}>
+        {!session && <LandingView onSubmit={(p, u) => setSession({ platform: p, username: u })} isMobile={isMobile} />}
 
         {session && (
-          <div style={{ display: 'flex', gap: 32, alignItems: 'flex-start', paddingTop: 24 }}>
+          <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? 16 : 32, alignItems: 'flex-start', paddingTop: 24 }}>
             {/* ── Left sidebar ── */}
-            <aside style={sidebarStyle}>
+            <aside style={isMobile ? { ...sidebarStyle, width: '100%', flexDirection: 'row', flexWrap: 'wrap', gap: 10, order: 2 } : sidebarStyle}>
               {/* Platform + username identity (username is editable) */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '4px 2px 8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '4px 2px 8px', ...(isMobile ? { width: '100%' } : {}) }}>
                 <button
                   type="button"
                   title={`Switch to ${session.platform === 'lichess' ? 'Chess.com' : 'Lichess'}`}
@@ -189,7 +203,7 @@ function App() {
                 />
               </div>
 
-              <div style={controlCardStyle}>
+              <div style={isMobile ? { ...controlCardStyle, width: '100%' } : controlCardStyle}>
                 <div style={{ marginBottom: 14 }}>
                   <label style={controlLabelStyle}>Playing as</label>
                   <ColorToggle value={color} onChange={setColor} />
@@ -269,7 +283,7 @@ function App() {
             </aside>
 
             {/* ── Right: chart or loading ── */}
-            <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
+            <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'flex-start', minWidth: 0, width: '100%', ...(isMobile ? { order: 1 } : {}) }}>
               {sync.status === 'done' && total === 1 ? (
                 <GameReplay
                   focusPath={focusPath}
@@ -281,6 +295,7 @@ function App() {
                   orientation={color}
                   gameId={fullGameId ?? undefined}
                   onBackToChart={() => setFocusPath([])}
+                  isMobile={isMobile}
                 />
               ) : sync.status === 'done' && total > 1 ? (
                 <Sunburst
@@ -290,6 +305,9 @@ function App() {
                   focusPath={focusPath}
                   onFocusChange={setFocusPath}
                   size={680}
+                  isMobile={isMobile}
+                  visibleRings={isMobile ? 3 : undefined}
+                  holeUnits={isMobile ? 7 : undefined}
                   exportRef={sunburstRef}
                 />
               ) : sync.status === 'done' ? (
@@ -297,7 +315,7 @@ function App() {
                   No games found for this user/filter combination.
                 </div>
               ) : (
-                <LoadingBoard state={sync} />
+                <LoadingBoard state={sync} isMobile={isMobile} />
               )}
             </div>
           </div>
@@ -309,7 +327,7 @@ function App() {
           <a href="https://gooseworks.io/" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, opacity: 0.5, transition: 'opacity 0.15s' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.opacity = '0.85'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.opacity = '0.5'; }}>
-            <img src="/GooseworksLogoWhite.webp" alt="Gooseworks" style={{ height: 18, width: 'auto' }} />
+            <img src="/GooseworksLogoWhite.webp" alt="Gooseworks" className="gooseworks-logo" style={{ height: 54, width: 'auto' }} />
           </a>
         </div>
         <span>
@@ -334,6 +352,11 @@ function App() {
         .platform-btn:hover { border-color: var(--border-hover) !important; }
         .platform-btn.selected:hover { border-color: var(--accent-hover) !important; }
         footer a:hover { color: var(--text-muted) !important; }
+        .gooseworks-logo { height: 54px; width: auto; }
+        @media (max-width: 767px) {
+          .gooseworks-logo { height: 36px; }
+          footer { padding: 12px 16px !important; font-size: 10px !important; }
+        }
       `}</style>
     </div>
   );
@@ -353,8 +376,9 @@ function extractRemainingMoves(node: SerializedNode): string[] {
   return moves;
 }
 
-function LandingView({ onSubmit }: {
+function LandingView({ onSubmit, isMobile }: {
   onSubmit: (p: Platform, u: string) => void;
+  isMobile: boolean;
 }) {
   return (
     <div
@@ -364,7 +388,7 @@ function LandingView({ onSubmit }: {
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '0 24px',
+        padding: '0 16px',
         minHeight: '100vh',
         position: 'relative',
         overflow: 'hidden',
@@ -372,20 +396,20 @@ function LandingView({ onSubmit }: {
     >
       {/* Skeleton sunburst — decorative backdrop */}
       <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', pointerEvents: 'none' }}>
-        <SunburstSkeleton size={600} />
+        <SunburstSkeleton size={isMobile ? 320 : 600} />
       </div>
 
       {/* Foreground content */}
-      <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 40 }}>
+      <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 32, width: '100%' }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-          <h2 style={{ margin: 0, fontSize: 32, fontWeight: 800, letterSpacing: '-0.04em', color: 'var(--text)', textAlign: 'center' }}>
+          <h2 style={{ margin: 0, fontSize: isMobile ? 24 : 32, fontWeight: 800, letterSpacing: '-0.04em', color: 'var(--text)', textAlign: 'center' }}>
             Visualise your <span style={{ color: 'var(--accent)' }}>openings</span>
           </h2>
           <p style={{ margin: 0, fontSize: 14, color: 'var(--text-muted)', textAlign: 'center', fontWeight: 400 }}>
             Explore your most-played openings as white and black
           </p>
         </div>
-        <UserForm onSubmit={onSubmit} />
+        <UserForm onSubmit={onSubmit} isMobile={isMobile} />
       </div>
     </div>
   );

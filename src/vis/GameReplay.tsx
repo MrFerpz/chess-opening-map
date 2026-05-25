@@ -12,6 +12,7 @@ interface Props {
   orientation: Color;
   gameId?: string;
   onBackToChart: () => void;
+  isMobile?: boolean;
 }
 
 function gameUrl(gameId: string): string {
@@ -31,7 +32,8 @@ function uciToArrow(uci: string | null, color = '#3ddc97'): Arrow[] {
   return [{ startSquare: uci.slice(0, 2), endSquare: uci.slice(2, 4), color }];
 }
 
-export function GameReplay({ focusPath, remainingMoves, orientation, gameId, onBackToChart }: Props) {
+export function GameReplay({ focusPath, remainingMoves, orientation, gameId, onBackToChart, isMobile }: Props) {
+  const boardSize = isMobile ? Math.min(window.innerWidth - 32, 360) : 400;
   const [cursor, setCursor] = useState(0);
   const [boardOrientation, setBoardOrientation] = useState<Color>(orientation);
   const moveListRef = useRef<HTMLDivElement>(null);
@@ -76,11 +78,20 @@ export function GameReplay({ focusPath, remainingMoves, orientation, gameId, onB
     return () => window.removeEventListener('keydown', onKey);
   }, [totalSteps]);
 
-  // Scroll current move into view.
+  // Scroll current move into view within the move list only (no page scroll).
   useEffect(() => {
     if (moveListRef.current) {
       const active = moveListRef.current.querySelector('[data-active="true"]') as HTMLElement | null;
-      active?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      if (active) {
+        const list = moveListRef.current;
+        const listRect = list.getBoundingClientRect();
+        const activeRect = active.getBoundingClientRect();
+        if (activeRect.bottom > listRect.bottom) {
+          list.scrollTop += activeRect.bottom - listRect.bottom + 4;
+        } else if (activeRect.top < listRect.top) {
+          list.scrollTop -= listRect.top - activeRect.top + 4;
+        }
+      }
     }
   }, [cursor]);
 
@@ -125,7 +136,7 @@ export function GameReplay({ focusPath, remainingMoves, orientation, gameId, onB
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: '24px 0', width: '100%' }}>
       {/* Board + eval bar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-        <div style={{ width: 400, height: 400, borderRadius: 6, overflow: 'hidden', boxShadow: '0 4px 32px rgba(0,0,0,0.5)', flexShrink: 0 }}>
+        <div style={{ width: boardSize, height: boardSize, borderRadius: 6, overflow: 'hidden', boxShadow: '0 4px 32px rgba(0,0,0,0.5)', flexShrink: 0 }}>
           <Chessboard
             options={{
               position: fen,
@@ -138,7 +149,7 @@ export function GameReplay({ focusPath, remainingMoves, orientation, gameId, onB
             }}
           />
         </div>
-        <EvalBar eval_={currentEval} height={400} loading={isLoading && currentEval === undefined} />
+        <EvalBar eval_={currentEval} height={boardSize} loading={isLoading && currentEval === undefined} />
       </div>
 
       {/* Engine line */}
@@ -152,7 +163,7 @@ export function GameReplay({ focusPath, remainingMoves, orientation, gameId, onB
       </div>
 
       {/* Eval graph */}
-      <EvalGraph evals={graphEvals} cursor={cursor} onSeek={setCursor} />
+      <EvalGraph evals={graphEvals} cursor={cursor} onSeek={setCursor} width={boardSize} />
 
       {/* Nav controls */}
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
@@ -179,7 +190,7 @@ export function GameReplay({ focusPath, remainingMoves, orientation, gameId, onB
       </div>
 
       {/* Move list */}
-      <div ref={moveListRef} style={{ display: 'flex', flexWrap: 'wrap', gap: 4, maxWidth: 520, justifyContent: 'center' }}>
+      <div ref={moveListRef} style={{ display: 'flex', flexWrap: 'wrap', gap: 4, maxWidth: boardSize, justifyContent: 'center' }}>
         {remainingMoves.map((san, i) => {
           const step = i + 1;
           const isCurrent = cursor === step;
@@ -221,8 +232,8 @@ export function GameReplay({ focusPath, remainingMoves, orientation, gameId, onB
 }
 
 // ── Eval graph ────────────────────────────────────────────────────────────────
-function EvalGraph({ evals, cursor, onSeek }: { evals: (number | null)[]; cursor: number; onSeek: (i: number) => void }) {
-  const W = 520, H = 60;
+function EvalGraph({ evals, cursor, onSeek, width = 520 }: { evals: (number | null)[]; cursor: number; onSeek: (i: number) => void; width?: number }) {
+  const W = width, H = 60;
   const mid = H / 2;
   if (evals.length < 2) return null;
 
@@ -232,10 +243,11 @@ function EvalGraph({ evals, cursor, onSeek }: { evals: (number | null)[]; cursor
     return { x, y, v };
   });
 
-  // Build SVG path for white area (above midline = white advantage).
+  // White advantage: region between the eval line and the midline (top half when white winning).
+  // Black advantage: region between the eval line and the midline (bottom half when black winning).
   const polyline = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
   const whiteArea = `${polyline} L${W},${mid} L0,${mid} Z`;
-  const blackArea = `${polyline} L${W},0 L0,0 Z`;
+  const blackArea = `${polyline} L${W},${mid} L0,${mid} Z`;
 
   const cursorX = (cursor / (evals.length - 1)) * W;
 
@@ -249,13 +261,13 @@ function EvalGraph({ evals, cursor, onSeek }: { evals: (number | null)[]; cursor
         onSeek(Math.round(ratio * (evals.length - 1)));
       }}
     >
-      {/* Background — dark for black's region, light for white's */}
-      <rect width={W} height={mid} fill="#2a2d3a" />
-      <rect y={mid} width={W} height={mid} fill="#4a4e5e" />
-      {/* Black advantage area */}
-      <path d={blackArea} fill="#1a1d26" clipPath="url(#topHalf)" />
-      {/* White advantage area */}
-      <path d={whiteArea} fill="#d8dbe8" clipPath="url(#bottomHalf)" />
+      {/* Background — top half white territory, bottom half black territory */}
+      <rect width={W} height={mid} fill="#4a4e5e" />
+      <rect y={mid} width={W} height={mid} fill="#2a2d3a" />
+      {/* White advantage area — fills above midline when white is winning */}
+      <path d={whiteArea} fill="#d8dbe8" clipPath="url(#topHalf)" />
+      {/* Black advantage area — fills below midline when black is winning */}
+      <path d={blackArea} fill="#1a1d26" clipPath="url(#bottomHalf)" />
       {/* Clip paths */}
       <defs>
         <clipPath id="topHalf"><rect width={W} height={mid} /></clipPath>

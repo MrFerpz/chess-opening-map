@@ -84,6 +84,8 @@ export function MoveArrow({ fromFen, san, boardSize, orientation }: Props) {
         position: 'absolute',
         inset: 0,
         pointerEvents: 'none',
+        width: '100%',
+        height: '100%',
       }}
     >
       <polygon

@@ -11,7 +11,7 @@ interface FamousGame {
 
 const FAMOUS_GAMES: FamousGame[] = [
   {
-    label: 'Immortal Game — Anderssen vs Kieseritzky, 1851',
+    label: 'Immortal Game,Anderssen vs Kieseritzky, 1851',
     moves: [
       'e4','e5','f4','exf4','Bc4','Qh4+','Kf1','b5','Bxb5','Nf6','Nf3','Qh6',
       'd3','Nh5','Nh4','Qg5','Nf5','c6','g4','Nf6','Rg1','cxb5','h4','Qg6',
@@ -20,7 +20,7 @@ const FAMOUS_GAMES: FamousGame[] = [
     ],
   },
   {
-    label: 'Opera Game — Morphy vs Duke of Brunswick, 1858',
+    label: 'Opera Game,Morphy vs Duke of Brunswick, 1858',
     moves: [
       'e4','e5','Nf3','d6','d4','Bg4','dxe5','Bxf3','Qxf3','dxe5','Bc4',
       'Nf6','Qb3','Qe7','Nc3','c6','Bg5','b5','Nxb5','cxb5','Bxb5+','Nbd7',
@@ -29,7 +29,7 @@ const FAMOUS_GAMES: FamousGame[] = [
     ],
   },
   {
-    label: 'Evergreen Game — Anderssen vs Dufresne, 1852',
+    label: 'Evergreen Game,Anderssen vs Dufresne, 1852',
     moves: [
       'e4','e5','Nf3','Nc6','Bc4','Bc5','b4','Bxb4','c3','Ba5','d4','exd4',
       'O-O','d3','Qb3','Qf6','e5','Qg6','Re1','Nge7','Ba3','b5','Qxb5','Rb8',
@@ -39,7 +39,7 @@ const FAMOUS_GAMES: FamousGame[] = [
     ],
   },
   {
-    label: "Game of the Century — Byrne vs Fischer, 1956",
+    label: "Game of the Century,Byrne vs Fischer, 1956",
     moves: [
       'Nf3','Nf6','c4','g6','Nc3','Bg7','d4','O-O','Bf4','d5','Qb3','dxc4',
       'Qxc4','c6','e4','Nbd7','Rd1','Nb6','Qc5','Bg4','Bg5','Na4','Qa3','Nxc3',
@@ -73,7 +73,7 @@ const FACT_INTERVAL_MS = 4000;
 
 const FACTS = [
   'There are more possible chess games than atoms in the observable universe.',
-  'The word "checkmate" comes from the Persian phrase "Shah Mat" — the king is dead.',
+  'The word "checkmate" comes from the Persian phrase "Shah Mat",the king is dead.',
   'The longest possible chess game is 5,949 moves.',
   'The first chess computer program was written in 1951 by Alan Turing.',
   'A knight can reach any square on the board in at most 6 moves.',
@@ -81,13 +81,13 @@ const FACTS = [
   'Castling is the only move where two pieces move at once.',
   'Magnus Carlsen became a grandmaster at age 13.',
   'The en passant rule has existed since the 15th century.',
-  'Deep Blue defeated Kasparov in 1997 — the first computer to beat a world champion in a match.',
+  'Deep Blue defeated Kasparov in 1997,the first computer to beat a world champion in a match.',
   'The folded paper analogy: if you folded a chessboard\'s 64 squares onto each other, the stack would reach the sun.',
   'Bobby Fischer could play chess blindfolded against multiple opponents simultaneously.',
   'The Immortal Game (1851) is considered the greatest attacking game ever played.',
   'Stockfish evaluates ~70 million positions per second on a modern CPU.',
   'There are 400 possible positions after each player\'s first move.',
-  'Chess has been played in space — cosmonauts played against ground controllers in 1970.',
+  'Chess has been played in space,cosmonauts played against ground controllers in 1970.',
 ];
 
 // Board size and container height are matched to the sunburst view so the board
@@ -100,9 +100,10 @@ const BOARD_SIZE = Math.floor(HOLE_RADIUS * Math.SQRT2);
 
 interface Props {
   state: SyncRunState;
+  isMobile?: boolean;
 }
 
-export function LoadingBoard({ state }: Props) {
+export function LoadingBoard({ state, isMobile }: Props) {
   const isWorking = state.status === 'loading-cache' || state.status === 'fetching';
 
   const [fen, setFen] = useState(STARTING_FEN);
@@ -163,8 +164,12 @@ export function LoadingBoard({ state }: Props) {
 
   const boardOffset = (SUNBURST_SIZE - BOARD_SIZE) / 2;
 
+  const scale = isMobile ? Math.min(1, (window.innerWidth - 32) / SUNBURST_SIZE) : 1;
+  const scaledHeight = SUNBURST_SIZE * scale;
+
   return (
-    <div style={{ position: 'relative', width: SUNBURST_SIZE, height: SUNBURST_SIZE }}>
+    <div style={{ width: '100%', display: 'flex', justifyContent: 'center', overflow: 'hidden', height: scaledHeight }}>
+    <div style={{ position: 'relative', width: SUNBURST_SIZE, height: SUNBURST_SIZE, flexShrink: 0, ...(isMobile ? { transform: `scale(${scale})`, transformOrigin: 'top center' } : {}) }}>
       {/* Board pinned to exact centre, matching CenterBoard position in Sunburst */}
       <div
         style={{
@@ -224,6 +229,7 @@ export function LoadingBoard({ state }: Props) {
           {statusLabel}
         </div>
       </div>
+    </div>
     </div>
   );
 }

@@ -4,6 +4,7 @@ import type { Platform } from '../types';
 interface Props {
   onSubmit: (platform: Platform, username: string) => void;
   disabled?: boolean;
+  isMobile?: boolean;
 }
 
 const PLATFORMS: { id: Platform; label: string; logo: string; invertLogo?: boolean }[] = [
@@ -11,9 +12,7 @@ const PLATFORMS: { id: Platform; label: string; logo: string; invertLogo?: boole
   { id: 'chesscom', label: 'Chess.com', logo: '/chesscomlogo.webp' },
 ];
 
-const FORM_WIDTH = 420;
-
-export function UserForm({ onSubmit, disabled }: Props) {
+export function UserForm({ onSubmit, disabled, isMobile }: Props) {
   const [platform, setPlatform] = useState<Platform>('lichess');
   const [username, setUsername] = useState('');
 
@@ -25,7 +24,7 @@ export function UserForm({ onSubmit, disabled }: Props) {
   };
 
   return (
-    <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12, width: FORM_WIDTH }}>
+    <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12, width: isMobile ? '100%' : 420 }}>
       {/* Platform picker */}
       <div style={{ display: 'flex', gap: 10 }}>
         {PLATFORMS.map(({ id, label, logo, invertLogo }) => {

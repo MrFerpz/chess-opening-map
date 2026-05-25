@@ -33,7 +33,7 @@ export function Tooltip({ node, x, y, totalGames, eval_, centreX }: Props) {
 
   const evalStr =
     eval_ === undefined ? '…'
-    : eval_ === null ? '—'
+    : eval_ === null ? '-'
     : formatEval(eval_);
 
   const tooltipW = 200;
