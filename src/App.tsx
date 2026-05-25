@@ -390,20 +390,9 @@ function App() {
                       openingName={openingName?.name ?? null}
                       onTopLinesChange={setNarrowTopLines}
                     />
-                    {/* Position info + top lines below the chart on mobile */}
+                    {/* Top lines below the chart on mobile */}
                     {isMobile && (
                       <div style={{ padding: '0 8px', display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
-                        <div style={{ color: 'var(--text-muted)', fontSize: 12, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                          <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.01em' }}>{total.toLocaleString()} games</span>
-                          <span style={{ color: 'var(--text-dim)', fontSize: 10.5 }}>
-                            Depth {focusPath.length} · {focusPath.length === 0 ? 'start' : focusPath.join(' ')}
-                          </span>
-                          {openingName && (
-                            <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', marginTop: 2, fontSize: 10.5 }}>
-                              {openingName.name}
-                            </span>
-                          )}
-                        </div>
                         {narrowTopLines.length > 0 && (
                           <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 5 }}>
                             <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-dim)', marginBottom: 2 }}>
