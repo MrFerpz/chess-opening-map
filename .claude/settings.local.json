@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:lichess.org)",
+      "Bash(gh repo *)",
+      "Bash(gh api *)",
+      "WebSearch",
+      "WebFetch(domain:recharts.org)",
+      "WebFetch(domain:echarts.apache.org)",
+      "WebFetch(domain:plotly.com)",
+      "WebFetch(domain:nivo.rocks)",
+      "WebFetch(domain:observablehq.com)",
+      "Bash(npm run *)",
+      "Bash(curl -s http://localhost:5174)",
+      "Bash(npx tsc *)",
+      "Bash(cwebp -q 90 /Users/fredpy/repos/chess-visualiser/lichess.png -o /Users/fredpy/repos/chess-visualiser/public/lichesslogo.webp)",
+      "Bash(cwebp -q 90 /Users/fredpy/repos/chess-visualiser/chesscom.png -o /Users/fredpy/repos/chess-visualiser/public/chesscomlogo.webp)",
+      "Bash(curl -s \"https://raw.githubusercontent.com/lichess-org/chess-openings/master/a.tsv\")",
+      "Bash(node *)"
+    ]
+  }
+}

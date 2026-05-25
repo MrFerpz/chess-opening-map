@@ -1,0 +1,56 @@
+:root {
+  color-scheme: dark;
+  font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  --bg: #0c0e14;
+  --surface: #13161f;
+  --surface-raised: #1a1d28;
+  --border: #252836;
+  --border-hover: #3a3f52;
+  --accent: #e6c419;
+  --accent-hover: #f0d44a;
+  --text: #e8eaf0;
+  --text-muted: #7a7f96;
+  --text-dim: #444858;
+  --win: #4caf7a;
+  --loss: #e05c5c;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(ellipse 55% 55% at 50% 50%, var(--bg) 40%, transparent 100%),
+    linear-gradient(45deg, #ffffff06 25%, transparent 25%),
+    linear-gradient(-45deg, #ffffff06 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #ffffff06 75%),
+    linear-gradient(-45deg, transparent 75%, #ffffff06 75%);
+  background-size: 100% 100%, 32px 32px, 32px 32px, 32px 32px, 32px 32px;
+  background-position: 0 0, 0 0, 0 16px, 16px -16px, -16px 0px;
+}
+
+#root {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  color: var(--text);
+}
+
+button {
+  font-family: inherit;
+}
+
+@keyframes cv-spin {
+  to { transform: rotate(360deg); }
+}
