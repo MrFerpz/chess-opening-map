@@ -1,6 +1,6 @@
 :root {
   color-scheme: dark;
-  font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+  font-family: 'Outfit', system-ui, -apple-system, sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -52,5 +52,10 @@ button {
 }
 
 @keyframes cv-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes skeleton-spin {
+  from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }

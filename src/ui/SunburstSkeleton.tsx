@@ -96,7 +96,7 @@ export function SunburstSkeleton({ size = 480 }: Props) {
       width={size}
       height={size}
       viewBox={`${-radius} ${-radius} ${size} ${size}`}
-      style={{ display: 'block', pointerEvents: 'none' }}
+      style={{ display: 'block', pointerEvents: 'none', animation: 'skeleton-spin 40s linear infinite' }}
       aria-hidden
     >
       {/* Outer disc */}

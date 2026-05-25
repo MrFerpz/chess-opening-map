@@ -26,23 +26,6 @@ const DEFAULT_FILTER: Filter = {
   limit: DEFAULT_GAME_LIMIT,
 };
 
-function KnightIcon({ size = 22 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 232.523 232.523" fill="currentColor">
-      <path d="M191.981,186.136c2.459-26.64,5.491-124.514-73.554-181.851L112.52,0l-8.45,17.83L71.919,6.041l7.338,41.919
-        c-14.624,9.853-35.107,25.227-45.82,40.37c-6.452,9.111-7.19,20.091-1.998,30.124c6.623,12.8,21.19,20.366,35.178,18.031
-        c11.724-1.956,25.005-8.281,33.993-13.181C97.595,144.116,87.003,186,50.676,186v0.124H39.277v46.399h165.236v-46.399h-12.531
-        V186.136z M87.476,24.633l11.396,4.182l-4.504,9.511c-0.979,0.588-2.376,1.434-4.061,2.482L87.476,24.633z M113.882,112.257
-        l0.375-11.585l-9.714,6.307c-0.23,0.148-22.848,14.724-39.916,17.572c-9.031,1.502-18.255-3.546-22.437-11.652
-        c-1.788-3.449-4.014-10.323,1.126-17.564c15.917-22.473,58.339-47.259,58.765-47.508l1.625-0.943l13.45-28.375
-        c23.979,19.113,39.123,42.445,48.598,65.707l-29.571-5.375l-2.163,11.913l36.522,6.638c3.062,9.522,5.272,18.879,6.827,27.786
-        l-32.391-5.887l-2.164,11.904l36.416,6.62c0.981,8.369,1.407,16.112,1.549,22.993l-34.921-6.349l-2.151,11.916l36.984,6.715
-        c-0.178,5.426-0.526,9.835-0.834,12.933H84.249C105.675,167.83,113.194,133.358,113.882,112.257z M192.419,220.43H51.397v-22.188
-        h141.022V220.43z"/>
-      <circle cx="99.041" cy="78.641" r="9.671"/>
-    </svg>
-  );
-}
 
 function App() {
   const [session, setSession] = useState<Session | null>(() => {
@@ -127,9 +110,7 @@ function App() {
       {session && <header style={headerStyle}>
         <div style={{ maxWidth: 1280, margin: '0 auto', width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ color: 'var(--accent)', display: 'flex' }}>
-              <KnightIcon size={28} />
-            </span>
+            <img src="/logo.webp" alt="Logo" style={{ width: 28, height: 28, objectFit: 'contain' }} />
             <span style={{ fontWeight: 800, fontSize: 18, letterSpacing: '-0.03em', color: 'var(--text)' }}>
               Chess Opening Visualiser
             </span>
@@ -324,6 +305,13 @@ function App() {
       </main>
 
       <footer style={footerStyle}>
+        <div style={{ marginBottom: 8 }}>
+          <a href="https://gooseworks.io/" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, opacity: 0.5, transition: 'opacity 0.15s' }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.opacity = '0.85'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.opacity = '0.5'; }}>
+            <img src="/GooseworksLogoWhite.webp" alt="Gooseworks" style={{ height: 18, width: 'auto' }} />
+          </a>
+        </div>
         <span>
           Data from{' '}
           <a href="https://www.chess.com/news/view/published-data-api" target="_blank" rel="noopener noreferrer" style={footerLinkStyle}>Chess.com API</a>
@@ -389,9 +377,14 @@ function LandingView({ onSubmit }: {
 
       {/* Foreground content */}
       <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 40 }}>
-        <h2 style={{ margin: 0, fontSize: 32, fontWeight: 800, letterSpacing: '-0.04em', color: 'var(--text)', textAlign: 'center' }}>
-          Visualise your <span style={{ color: 'var(--accent)' }}>openings</span>
-        </h2>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+          <h2 style={{ margin: 0, fontSize: 32, fontWeight: 800, letterSpacing: '-0.04em', color: 'var(--text)', textAlign: 'center' }}>
+            Visualise your <span style={{ color: 'var(--accent)' }}>openings</span>
+          </h2>
+          <p style={{ margin: 0, fontSize: 14, color: 'var(--text-muted)', textAlign: 'center', fontWeight: 400 }}>
+            Explore your most-played openings as white and black
+          </p>
+        </div>
         <UserForm onSubmit={onSubmit} />
       </div>
     </div>
