@@ -152,6 +152,7 @@ export function Sunburst({
   const lastMousePos = useRef<{ x: number; y: number } | null>(null);
   const highlightedArcKeyRef = useRef<string | null>(null);
   const mobileZoomTimeoutRef = useRef<number | null>(null);
+  const activeMobilePointerRef = useRef<{ pointerId: number; key: string } | null>(null);
   // Set to true when focusPath changes; cleared after the next hover re-detection.
   const pendingHoverUpdate = useRef(false);
 
@@ -499,6 +500,7 @@ export function Sunburst({
   }
 
   function handlePointerClick(ev: React.MouseEvent<HTMLCanvasElement>) {
+    if (isMobile) return;
     const hit = getNodeAtClientPoint(ev.clientX, ev.clientY);
     if (hit) {
       handleClickArc(hit);
@@ -518,15 +520,35 @@ export function Sunburst({
     if (!isMobile) return;
     const hit = getNodeAtClientPoint(ev.clientX, ev.clientY);
     if (!hit) return;
+    activeMobilePointerRef.current = { pointerId: ev.pointerId, key: pathKey(hit) };
     setMobileInfo(hit.data);
     evalCache.onHover(hit.data.fen);
     highlightArc(hit);
+  }
+
+  function handlePointerUp(ev: React.PointerEvent<HTMLCanvasElement>) {
+    if (!isMobile) return;
+    ev.preventDefault();
+    const active = activeMobilePointerRef.current;
+    activeMobilePointerRef.current = null;
+    if (!active || active.pointerId !== ev.pointerId) return;
+    const hit = getNodeAtClientPoint(ev.clientX, ev.clientY);
+    if (!hit || pathKey(hit) !== active.key) return;
+    handleClickArc(hit);
+  }
+
+  function handlePointerCancel(ev: React.PointerEvent<HTMLCanvasElement>) {
+    if (!isMobile) return;
+    if (activeMobilePointerRef.current?.pointerId === ev.pointerId) {
+      activeMobilePointerRef.current = null;
+    }
   }
 
   const handleClickArc = (n: SunburstNode) => {
     const local = localPath(n);
     if (local.length === 0) return;
     if (isMobile) {
+      const nextMove = local[0];
       setMobileInfo(n.data);
       evalCache.onHover(n.data.fen);
       highlightArc(n);
@@ -537,7 +559,7 @@ export function Sunburst({
         highlightedArcKeyRef.current = null;
         mobileZoomTimeoutRef.current = null;
         forwardHistoryRef.current = [];
-        onFocusChange([...focusPath, ...local]);
+        onFocusChange([...focusPath, nextMove]);
       }, MOBILE_ZOOM_DELAY_MS);
       return;
     }
@@ -655,6 +677,8 @@ export function Sunburst({
         height={size * (typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1)}
         style={{ ...touchSurfaceStyle, display: 'block', width: '100%', height: 'auto', position: 'absolute', inset: 0, borderRadius: '50%', cursor: 'pointer' }}
         onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
         onMouseMove={handlePointerMove}
         onClick={handlePointerClick}
         onMouseLeave={() => { lastMousePos.current = null; setHover(null); evalCache.onLeave(); }}

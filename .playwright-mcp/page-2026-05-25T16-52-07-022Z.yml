@@ -1,0 +1,46 @@
+- generic [ref=e3]:
+  - main [ref=e4]:
+    - generic [ref=e5]:
+      - generic:
+        - img
+      - generic [ref=e6]:
+        - generic [ref=e7]:
+          - heading "Map out your openings" [level=2] [ref=e8]
+          - paragraph [ref=e9]: Visualise your most-played openings as white and black
+        - generic [ref=e10]:
+          - generic [ref=e11]:
+            - button "Lichess Lichess" [ref=e12] [cursor=pointer]:
+              - img "Lichess" [ref=e13]
+              - generic [ref=e14]: Lichess
+            - button "Chess.com Chess.com" [ref=e15] [cursor=pointer]:
+              - img "Chess.com" [ref=e16]
+              - generic [ref=e17]: Chess.com
+          - generic [ref=e18]:
+            - textbox "Username" [active] [ref=e19]
+            - button "Go" [disabled] [ref=e20]
+  - contentinfo [ref=e22]:
+    - link "Gooseworks" [ref=e23] [cursor=pointer]:
+      - /url: https://gooseworks.io/
+      - img "Gooseworks" [ref=e24]
+    - generic [ref=e25]:
+      - text: Data from
+      - link "Chess.com API" [ref=e26] [cursor=pointer]:
+        - /url: https://www.chess.com/news/view/published-data-api
+      - text: and
+      - link "Lichess API" [ref=e27] [cursor=pointer]:
+        - /url: https://lichess.org/api
+      - text: · Opening names from
+      - link "lichess-org/chess-openings" [ref=e28] [cursor=pointer]:
+        - /url: https://github.com/lichess-org/chess-openings
+      - text: · Inspired by
+      - link "OpeningTree" [ref=e29] [cursor=pointer]:
+        - /url: https://www.openingtree.com/
+      - text: and
+      - link "@ebemunk" [ref=e30] [cursor=pointer]:
+        - /url: https://blog.ebemunk.com/a-visual-look-at-2-million-chess-games/
+      - text: data visualisations · Built with
+      - link "chess.js" [ref=e31] [cursor=pointer]:
+        - /url: https://github.com/jhlywa/chess.js
+      - text: and
+      - link "react-chessboard" [ref=e32] [cursor=pointer]:
+        - /url: https://github.com/Clariity/react-chessboard
