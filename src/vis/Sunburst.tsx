@@ -153,6 +153,7 @@ export function Sunburst({
   const highlightedArcKeyRef = useRef<string | null>(null);
   const mobileZoomTimeoutRef = useRef<number | null>(null);
   const activeMobilePointerRef = useRef<{ pointerId: number; key: string } | null>(null);
+  const clickHandledByPointerRef = useRef(false);
   // Set to true when focusPath changes; cleared after the next hover re-detection.
   const pendingHoverUpdate = useRef(false);
 
@@ -500,7 +501,13 @@ export function Sunburst({
   }
 
   function handlePointerClick(ev: React.MouseEvent<HTMLCanvasElement>) {
-    if (isMobile) return;
+    if (isMobile) {
+      if (clickHandledByPointerRef.current) {
+        clickHandledByPointerRef.current = false;
+        ev.preventDefault();
+      }
+      return;
+    }
     const hit = getNodeAtClientPoint(ev.clientX, ev.clientY);
     if (hit) {
       handleClickArc(hit);
@@ -520,6 +527,7 @@ export function Sunburst({
     if (!isMobile) return;
     const hit = getNodeAtClientPoint(ev.clientX, ev.clientY);
     if (!hit) return;
+    ev.preventDefault();
     activeMobilePointerRef.current = { pointerId: ev.pointerId, key: pathKey(hit) };
     setMobileInfo(hit.data);
     evalCache.onHover(hit.data.fen);
@@ -534,6 +542,7 @@ export function Sunburst({
     if (!active || active.pointerId !== ev.pointerId) return;
     const hit = getNodeAtClientPoint(ev.clientX, ev.clientY);
     if (!hit || pathKey(hit) !== active.key) return;
+    clickHandledByPointerRef.current = true;
     handleClickArc(hit);
   }
 
