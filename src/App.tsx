@@ -122,7 +122,7 @@ function App() {
       {session && <header style={headerStyle}>
         <div style={{ maxWidth: 1280, margin: '0 auto', width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <img src="/logo.webp" alt="Logo" style={{ width: 28, height: 28, objectFit: 'contain' }} />
+            <img src="/logo.webp" alt="Logo" onClick={() => setSession(null)} style={{ width: 28, height: 28, objectFit: 'contain', cursor: 'pointer' }} />
             {!isMobile && (
               <span style={{ fontWeight: 800, fontSize: 18, letterSpacing: '-0.03em', color: 'var(--text)' }}>
                 Chess Opening Visualiser

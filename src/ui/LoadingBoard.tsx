@@ -92,11 +92,14 @@ const FACTS = [
 
 // Board size and container height are matched to the sunburst view so the board
 // sits in the same screen position before and after loading completes.
-// size = 680 (sunburst), ringRadius = 680/2 / (5+6), boardSize = floor(holeRadius * sqrt(2))
+// Must mirror the holeUnits/visibleRings passed to <Sunburst> in App.tsx.
 const SUNBURST_SIZE = 680;
-const RING_RADIUS = (SUNBURST_SIZE / 2) / (5.0 + 6);
-const HOLE_RADIUS = RING_RADIUS * 5.0;
-const BOARD_SIZE = Math.floor(HOLE_RADIUS * Math.SQRT2);
+
+function boardSizeFor(holeUnits: number, visibleRings: number) {
+  const ringRadius = (SUNBURST_SIZE / 2) / (holeUnits + visibleRings);
+  const holeRadius = ringRadius * holeUnits;
+  return Math.floor(holeRadius * Math.SQRT2);
+}
 
 interface Props {
   state: SyncRunState;
@@ -104,6 +107,10 @@ interface Props {
 }
 
 export function LoadingBoard({ state, isMobile }: Props) {
+  const holeUnits = isMobile ? 7 : 5;
+  const visibleRings = isMobile ? 3 : 6;
+  const BOARD_SIZE = boardSizeFor(holeUnits, visibleRings);
+
   const isWorking = state.status === 'loading-cache' || state.status === 'fetching';
 
   const [fen, setFen] = useState(STARTING_FEN);
