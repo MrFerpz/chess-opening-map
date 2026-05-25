@@ -534,8 +534,8 @@ export function Sunburst({
 
       {focusPath.length > 0 && (
         <div style={{ position: 'absolute', left: 12, top: 12, display: 'flex', gap: 10 }}>
-          <ArrowLeft size={20} style={{ cursor: 'pointer', color: '#c8cad8', opacity: 0.8 }} onClick={handleZoomOut} title="Back one move" />
-          <ArrowLeftFromLine size={20} style={{ cursor: 'pointer', color: '#c8cad8', opacity: 0.8 }} onClick={handleReset} title="Reset to start" />
+          <ArrowLeft size={20} style={{ cursor: 'pointer', color: '#c8cad8', opacity: 0.8 }} onClick={handleZoomOut} aria-label="Back one move" />
+          <ArrowLeftFromLine size={20} style={{ cursor: 'pointer', color: '#c8cad8', opacity: 0.8 }} onClick={handleReset} aria-label="Reset to start" />
         </div>
       )}
     </div>
