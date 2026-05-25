@@ -1,6 +1,6 @@
+import { createPortal } from 'react-dom';
 import type { SerializedNode } from '../types';
 import { winRate } from './colorScale';
-import { colorForLocalPath } from './colorScale';
 import type { EvalResult } from '../hooks/useStockfish';
 import { formatEval } from '../hooks/useStockfish';
 
@@ -10,11 +10,11 @@ interface Props {
   y: number;
   totalGames: number;
   eval_: EvalResult | null | undefined;
-  centreX?: number;
 }
 
-export function Tooltip({ node, x, y, totalGames, eval_, centreX }: Props) {
+export function Tooltip({ node, x, y, totalGames, eval_ }: Props) {
   if (!node) return null;
+  if (typeof document === 'undefined') return null;
 
   const wr = Math.round(winRate(node) * 100);
   const pct = totalGames > 0 ? Math.round((node.count / totalGames) * 100) : 0;
@@ -37,16 +37,31 @@ export function Tooltip({ node, x, y, totalGames, eval_, centreX }: Props) {
     : formatEval(eval_);
 
   const tooltipW = 200;
-  const tooltipH = 120;
-  const flipX = centreX != null ? x < centreX : x + 14 + tooltipW > window.innerWidth - 8;
-  const flipY = y + 14 + tooltipH > window.innerHeight - 8;
+  const tooltipH = 122;
+  const gap = 10;
+  const margin = 8;
+  const viewportW = typeof window === 'undefined' ? 0 : window.innerWidth;
+  const viewportH = typeof window === 'undefined' ? 0 : window.innerHeight;
+  const placeRight = x >= viewportW / 2;
+  const preferredLeft = placeRight ? x + gap : x - tooltipW - gap;
+  const preferredTop = y + gap;
+  const left = Math.max(
+    margin,
+    Math.min(preferredLeft, viewportW - tooltipW - margin),
+  );
+  const top = Math.max(
+    margin,
+    Math.min(preferredTop, viewportH - tooltipH - margin),
+  );
 
-  return (
+  return createPortal(
     <div
       style={{
         position: 'fixed',
-        left: flipX ? x - tooltipW - 14 : x + 14,
-        top: flipY ? y - tooltipH - 14 : y + 14,
+        left,
+        top,
+        width: tooltipW,
+        boxSizing: 'border-box',
         background: 'rgba(13,15,22,0.97)',
         border: '1px solid var(--border)',
         color: 'var(--text)',
@@ -57,7 +72,6 @@ export function Tooltip({ node, x, y, totalGames, eval_, centreX }: Props) {
         fontFamily: 'inherit',
         pointerEvents: 'none',
         zIndex: 100,
-        minWidth: 180,
         boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
       }}
     >
@@ -88,8 +102,7 @@ export function Tooltip({ node, x, y, totalGames, eval_, centreX }: Props) {
         <span style={{ color: 'var(--text-muted)' }}>{node.draws.toLocaleString()}D</span>
         <span style={{ color: 'var(--loss)' }}>{node.losses.toLocaleString()}L</span>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
-
-export { colorForLocalPath };

@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { X } from 'lucide-react';
 import type { Platform } from '../types';
 
 interface Props {
@@ -29,6 +30,12 @@ function saveToHistory(platform: Platform, username: string) {
   localStorage.setItem(HISTORY_KEY, JSON.stringify({ ...all, [platform]: list }));
 }
 
+function removeFromHistory(platform: Platform, username: string) {
+  const all = loadHistory();
+  const list = (all[platform] ?? []).filter((u) => u !== username);
+  localStorage.setItem(HISTORY_KEY, JSON.stringify({ ...all, [platform]: list }));
+}
+
 export function UserForm({ onSubmit, disabled, isMobile }: Props) {
   const [platform, setPlatform] = useState<Platform>('lichess');
   const [username, setUsername] = useState('');
@@ -44,6 +51,11 @@ export function UserForm({ onSubmit, disabled, isMobile }: Props) {
     saveToHistory(platform, u);
     setHistory(loadHistory());
     onSubmit(platform, u);
+  };
+
+  const removeSuggestion = (u: string) => {
+    removeFromHistory(platform, u);
+    setHistory(loadHistory());
   };
 
   const suggestions = (history[platform] ?? []).filter(
@@ -140,26 +152,62 @@ export function UserForm({ onSubmit, disabled, isMobile }: Props) {
       {/* Recent searches — always rendered to avoid layout shift */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: -4, minHeight: 30 }}>
           {suggestions.map((u) => (
-            <button
+            <span
               key={u}
-              type="button"
-              disabled={disabled}
-              onClick={() => go(u)}
               style={{
-                padding: '4px 12px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                overflow: 'hidden',
                 borderRadius: 20,
                 border: '1px solid var(--border)',
                 background: 'var(--surface-raised)',
-                color: 'var(--text-muted)',
-                fontSize: 13,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--border-hover)'; e.currentTarget.style.color = 'var(--text)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-muted)'; }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--border-hover)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
             >
-              {u}
-            </button>
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => go(u)}
+                style={{
+                  padding: '4px 6px 4px 12px',
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'var(--text-muted)',
+                  fontSize: 13,
+                  cursor: disabled ? 'not-allowed' : 'pointer',
+                  fontFamily: 'inherit',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; }}
+              >
+                {u}
+              </button>
+              <button
+                type="button"
+                disabled={disabled}
+                aria-label={`Remove ${u} from recent searches`}
+                title={`Remove ${u}`}
+                onClick={() => removeSuggestion(u)}
+                style={{
+                  width: 24,
+                  height: 24,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: 'none',
+                  borderLeft: '1px solid var(--border)',
+                  background: 'transparent',
+                  color: 'var(--text-dim)',
+                  cursor: disabled ? 'not-allowed' : 'pointer',
+                  padding: 0,
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-dim)'; }}
+              >
+                <X size={13} strokeWidth={2.5} aria-hidden="true" />
+              </button>
+            </span>
           ))}
         </div>
     </form>

@@ -5,11 +5,8 @@ import {
   buildHierarchy,
   easeInOut,
   HOLE_UNITS,
-  labelTransform,
-  labelVisible,
   lerpRect,
   localPath,
-  makeArc,
   pathKey,
   rectVisible,
   targetFor,
@@ -112,7 +109,7 @@ export function Sunburst({
   const holeRadius = ringRadius * holeUnits;
   const boardSize = Math.floor(holeRadius * Math.SQRT2);
 
-  const arcGen = useMemo(() => makeArc(ringRadius), [ringRadius]);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const hierarchyRoot = useMemo(() => buildHierarchy(rootData), [rootData]);
   const nodes = useMemo(
@@ -125,12 +122,11 @@ export function Sunburst({
   // Current interpolated rect — what was last painted.
   const renderedRectsRef = useRef<Map<string, Rect>>(new Map());
 
-  // Refs into the DOM for imperative updates (bypasses React reconciliation).
-  const pathRefsRef = useRef<Map<string, SVGPathElement>>(new Map());
-  const textRefsRef = useRef<Map<string, SVGTextElement>>(new Map());
   // Fill colours kept in sync with the current focusPath so the rAF loop
   // can stamp the correct colour at the same moment it makes an arc visible.
   const fillMapRef = useRef<Map<string, string>>(new Map());
+  // Node data needed by the canvas painter (san label, depth).
+  const nodeDataRef = useRef<Map<string, { san: string | null; depth: number }>>(new Map());
 
   const rafRef = useRef<number | null>(null);
   const prevFocusPathRef = useRef<string[]>(focusPath);
@@ -146,36 +142,29 @@ export function Sunburst({
 
   useImperativeHandle(exportRef, () => ({
     exportPng: async (filename = 'chess-openings.png') => {
-      const svg = svgRef.current;
-      if (!svg) return;
+      const sunburstCanvas = canvasRef.current;
+      if (!sunburstCanvas) return;
 
       const dpr = window.devicePixelRatio || 1;
 
-      // 1. Rasterize the sunburst SVG. Replace the cross-origin font name so
-      //    the canvas stays untainted and toBlob() doesn't throw.
-      const clone = svg.cloneNode(true) as SVGSVGElement;
-      clone.setAttribute('width', String(size));
-      clone.setAttribute('height', String(size));
-      let svgData = new XMLSerializer().serializeToString(clone);
-      svgData = svgData.replace(/DM Sans/g, 'system-ui');
-      const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-      const svgUrl = URL.createObjectURL(svgBlob);
-      const sunburstImg = await new Promise<HTMLImageElement>((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => { URL.revokeObjectURL(svgUrl); resolve(img); };
-        img.onerror = () => { URL.revokeObjectURL(svgUrl); reject(); };
-        img.src = svgUrl;
-      });
-
-      // 2. Composite onto a canvas.
       const canvas = document.createElement('canvas');
       canvas.width = size * dpr;
       canvas.height = size * dpr;
       const ctx = canvas.getContext('2d')!;
       ctx.scale(dpr, dpr);
-      ctx.drawImage(sunburstImg, 0, 0, size, size);
+      ctx.drawImage(
+        sunburstCanvas,
+        0,
+        0,
+        sunburstCanvas.width,
+        sunburstCanvas.height,
+        0,
+        0,
+        size,
+        size,
+      );
 
-      // 3. Draw the board programmatically so we bypass DOM serialization
+      // Draw the board programmatically so we bypass DOM serialization
       //    issues (react-chessboard renders HTML divs, not a single SVG).
       const bx = (size - boardSize) / 2;
       const by = (size - boardSize) / 2;
@@ -193,8 +182,86 @@ export function Sunburst({
     },
   }), [size, boardSize]);
 
-  // ─── rAF loop ────────────────────────────────────────────────────────────
-  // Defined once, never recreated. Reads animMap and writes directly to DOM.
+  // ─── Canvas painter ───────────────────────────────────────────────────────
+  // Draws all arcs + labels onto the canvas in one pass. Called from the rAF loop.
+  function paintCanvas(rendered: Map<string, Rect>) {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const dpr = window.devicePixelRatio || 1;
+    const cx = (size / 2) * dpr;
+    const cy = (size / 2) * dpr;
+    const rr = ringRadius * dpr;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Background disc
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius * dpr, 0, 2 * Math.PI);
+    ctx.fillStyle = '#13161f';
+    ctx.fill();
+
+    // Arcs
+    for (const [key, r] of rendered) {
+      if (!rectVisible(r)) continue;
+      const innerR = r.y0 * rr;
+      const outerR = Math.max(r.y0 * rr, r.y1 * rr - dpr);
+      const padAngle = Math.min((r.x1 - r.x0) / 2, 0.005);
+      // padRadius matches d3-shape: padRadius * 1.5
+      const padR = rr * 1.5;
+      const halfPad = padAngle > 0 && padR > 0 ? Math.asin(padAngle / 2 / padR) * 2 : 0;
+      const startAngle = r.x0 + halfPad - Math.PI / 2;
+      const endAngle   = r.x1 - halfPad - Math.PI / 2;
+      if (endAngle <= startAngle) continue;
+
+      const fill = fillMapRef.current.get(key) ?? '#555';
+      ctx.beginPath();
+      ctx.arc(cx, cy, outerR, startAngle, endAngle);
+      ctx.arc(cx, cy, innerR, endAngle, startAngle, true);
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
+      ctx.strokeStyle = '#13161f';
+      ctx.lineWidth = 1.5 * dpr;
+      ctx.stroke();
+    }
+
+    // Labels (drawn after all arcs so they sit on top)
+    const fontSize = (isMobile ? 14 : 11) * dpr;
+    ctx.font = `600 ${fontSize}px DM Sans, system-ui`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    for (const [key, r] of rendered) {
+      if (!rectVisible(r)) continue;
+      // Same visibility threshold as SVG version
+      if ((r.y1 - r.y0) <= 0.4 || (r.y1 - r.y0) * (r.x1 - r.x0) <= 0.04) continue;
+      const nd = nodeDataRef.current.get(key);
+      if (!nd?.san) continue;
+      if (isMobile && nd.depth > 2) continue;
+
+      const midAngle = (r.x0 + r.x1) / 2 - Math.PI / 2;
+      const midR = ((r.y0 + r.y1) / 2) * rr;
+      const lx = cx + Math.cos(midAngle) * midR;
+      const ly = cy + Math.sin(midAngle) * midR;
+
+      ctx.save();
+      ctx.translate(lx, ly);
+      // Rotate label to follow arc tangent, flipping for bottom half
+      let rot = midAngle + Math.PI / 2;
+      if (rot > Math.PI / 2 && rot < (3 * Math.PI) / 2) rot += Math.PI;
+      ctx.rotate(rot);
+      ctx.strokeStyle = 'rgba(0,0,0,0.67)';
+      ctx.lineWidth = 2.5 * dpr;
+      ctx.strokeText(nd.san, 0, 0);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(nd.san, 0, 0);
+      ctx.restore();
+    }
+  }
+
+  // ─── rAF loop ─────────────────────────────────────────────────────────────
   const rafLoopRef = useRef<() => void>(() => {});
   rafLoopRef.current = () => {
     const now = performance.now();
@@ -204,34 +271,11 @@ export function Sunburst({
     for (const [key, anim] of animMap.current) {
       const elapsed = Math.max(0, now - anim.startedAt);
       const t = Math.min(1, elapsed / ANIM_MS);
-      const r = lerpRect(anim.start, anim.target, easeInOut(t));
-      rendered.set(key, r);
+      rendered.set(key, lerpRect(anim.start, anim.target, easeInOut(t)));
       if (t < 1) allDone = false;
-
-      // Imperatively update path element.
-      const pathEl = pathRefsRef.current.get(key);
-      if (pathEl) {
-        if (rectVisible(r)) {
-          pathEl.setAttribute('d', arcGen(r) ?? '');
-          const fill = fillMapRef.current.get(key);
-          if (fill) pathEl.setAttribute('fill', fill);
-          pathEl.style.display = '';
-        } else {
-          pathEl.style.display = 'none';
-        }
-      }
-
-      // Imperatively update text element.
-      const textEl = textRefsRef.current.get(key);
-      if (textEl) {
-        if (labelVisible(r)) {
-          textEl.setAttribute('transform', labelTransform(r, ringRadius));
-          textEl.style.display = '';
-        } else {
-          textEl.style.display = 'none';
-        }
-      }
     }
+
+    paintCanvas(rendered);
 
     if (!allDone) {
       rafRef.current = requestAnimationFrame(() => rafLoopRef.current());
@@ -328,43 +372,86 @@ export function Sunburst({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rootData, focusPath.join('>')]);
 
+  const renderableNodes = useMemo(
+    () => nodes.filter((n) => n.depth > 0 && n.depth <= visibleRings),
+    [nodes, visibleRings],
+  );
+
   // ─── Hover re-detection after focus change ───────────────────────────────
   // Runs whenever nodes changes (i.e. when new rootData arrives after a click).
   // Geometrically hit-tests the stored cursor position against the new arc layout.
   useEffect(() => {
     if (!pendingHoverUpdate.current) return;
-    if (!lastMousePos.current || !svgRef.current) {
+    if (!lastMousePos.current) {
       pendingHoverUpdate.current = false;
       return;
     }
     pendingHoverUpdate.current = false;
 
     const { x, y } = lastMousePos.current;
-    const svgRect = svgRef.current.getBoundingClientRect();
-    const svgX = x - svgRect.left - radius;
-    const svgY = y - svgRect.top - radius;
-    const dist = Math.sqrt(svgX * svgX + svgY * svgY);
-    const yUnit = dist / ringRadius;
-    // d3-shape arc: angle 0 = top (−y in SVG coords), increasing clockwise.
-    // atan2(svgX, -svgY) gives 0 at top, π/2 at right — matching d3's convention.
-    let angle = Math.atan2(svgX, -svgY);
-    if (angle < 0) angle += 2 * Math.PI;
-
-    const hit = nodes.find((n) => {
-      if (n.depth === 0 || n.depth > visibleRings) return false;
-      const tgt = targetFor(n, visibleRings, holeUnits);
-      if (yUnit < tgt.y0 || yUnit >= tgt.y1) return false;
-      return angle >= tgt.x0 && angle < tgt.x1;
-    });
-
+    const hit = getNodeAtClientPoint(x, y);
     if (hit) {
       setHover({ node: hit.data, x, y });
       evalCache.onHover(hit.data.fen);
     } else {
       setHover(null);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodes]);
+
+  function getChartPoint(clientX: number, clientY: number) {
+    const el = svgRef.current ?? containerRef.current;
+    if (!el) return null;
+    const rect = el.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return null;
+
+    const chartX = (clientX - rect.left) * (size / rect.width) - radius;
+    const chartY = (clientY - rect.top) * (size / rect.height) - radius;
+    const dist = Math.sqrt(chartX * chartX + chartY * chartY);
+    const yUnit = dist / ringRadius;
+    // d3-shape arc: angle 0 = top (-y in SVG coords), increasing clockwise.
+    let angle = Math.atan2(chartX, -chartY);
+    if (angle < 0) angle += 2 * Math.PI;
+
+    return { dist, yUnit, angle };
+  }
+
+  function getNodeAtClientPoint(clientX: number, clientY: number): SunburstNode | null {
+    const point = getChartPoint(clientX, clientY);
+    if (!point) return null;
+    return renderableNodes.find((n) => {
+      const tgt = targetFor(n, visibleRings, holeUnits);
+      if (point.yUnit < tgt.y0 || point.yUnit >= tgt.y1) return false;
+      return point.angle >= tgt.x0 && point.angle < tgt.x1;
+    }) ?? null;
+  }
+
+  function isInHole(clientX: number, clientY: number): boolean {
+    const point = getChartPoint(clientX, clientY);
+    return point != null && point.dist <= holeRadius;
+  }
+
+  function handlePointerMove(ev: React.MouseEvent<SVGSVGElement>) {
+    lastMousePos.current = { x: ev.clientX, y: ev.clientY };
+    const hit = getNodeAtClientPoint(ev.clientX, ev.clientY);
+    if (!hit) {
+      setHover(null);
+      return;
+    }
+    setHover({ node: hit.data, x: ev.clientX, y: ev.clientY });
+    evalCache.onHover(hit.data.fen);
+  }
+
+  function handlePointerClick(ev: React.MouseEvent<SVGSVGElement>) {
+    const hit = getNodeAtClientPoint(ev.clientX, ev.clientY);
+    if (hit) {
+      handleClickArc(hit);
+      return;
+    }
+    if (focusPath.length > 0 && isInHole(ev.clientX, ev.clientY)) {
+      handleZoomOut();
+    }
+  }
 
   const handleClickArc = (n: SunburstNode) => {
     const local = localPath(n);
@@ -409,23 +496,32 @@ export function Sunburst({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusPath]);
 
-  // When colorMode changes, update fills for all currently-rendered arcs imperatively.
+  // Rebuild fill + node-data maps whenever nodes or colorMode changes.
   useEffect(() => {
-    for (const [key, pathEl] of pathRefsRef.current) {
-      const fill = fillMapRef.current.get(key);
-      if (fill) pathEl.setAttribute('fill', fill);
+    for (const d of renderableNodes) {
+      const key = pathKey(d);
+      const parent = d.parent as SunburstNode | null;
+      const siblingIndex = parent?.children?.indexOf(d) ?? 0;
+      const local = localPath(d);
+      fillMapRef.current.set(key, colorMode === 'winrate'
+        ? colorForWinRate(winRate(d.data), d.depth)
+        : colorForLocalPath(local, d.depth, siblingIndex, focusPath.length));
+      nodeDataRef.current.set(key, { san: d.data.san ?? null, depth: d.depth });
     }
+    paintCanvas(renderedRectsRef.current);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [colorMode]);
+  }, [renderableNodes, colorMode]);
 
-  // ─── Initial render — stable SVG skeleton ────────────────────────────────
-  // React renders <path> / <text> elements once per node set change.
-  // The rAF loop mutates their attributes directly; React never touches them again
-  // during animation. We use callback refs to register DOM elements.
-  const renderableNodes = useMemo(
-    () => nodes.filter((n) => n.depth > 0 && n.depth <= visibleRings),
-    [nodes],
-  );
+  // Keep canvas sized to device pixel ratio.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = size * dpr;
+    canvas.height = size * dpr;
+    paintCanvas(renderedRectsRef.current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [size]);
 
   const focusFen = rootData.fen || STARTING_FEN;
   focusFenRef.current = focusFen;
@@ -470,86 +566,29 @@ export function Sunburst({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', width: '100%' }}>
     <div style={{ display: 'flex', alignItems: 'center', gap: 14, width: '100%', overflow: 'visible' }}>
-    <div ref={containerRef} style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: size, height: 'auto', aspectRatio: '1 / 1', margin: '0 auto', overflow: 'visible' }}>
+    <div ref={containerRef} style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: size, height: 'auto', aspectRatio: '1 / 1', margin: '0 auto', overflow: 'visible', contain: 'layout' }}>
+      {/* Canvas: draws all arcs + labels */}
+      <canvas
+        ref={canvasRef}
+        width={size * (typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1)}
+        height={size * (typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1)}
+        style={{ display: 'block', width: '100%', height: 'auto', position: 'absolute', inset: 0, borderRadius: '50%' }}
+      />
+
+      {/* Thin SVG overlay: one event plane plus visible outer separator. */}
       <svg
         ref={svgRef}
         width={size}
         height={size}
         viewBox={`${-radius} ${-radius} ${size} ${size}`}
-        style={{ display: 'block', userSelect: 'none', width: '100%', height: 'auto' }}
-        onMouseMove={(ev) => { lastMousePos.current = { x: ev.clientX, y: ev.clientY }; }}
-        onMouseLeave={() => { lastMousePos.current = null; setHover(null); }}
+        style={{ display: 'block', userSelect: 'none', width: '100%', height: 'auto', position: 'absolute', inset: 0, cursor: 'pointer' }}
+        onMouseMove={handlePointerMove}
+        onClick={handlePointerClick}
+        onMouseLeave={() => { lastMousePos.current = null; setHover(null); evalCache.onLeave(); }}
       >
-        {/* Background disc */}
-        <circle r={radius} fill="#13161f" />
-        {/* Subtle outer separator ring */}
+        <circle r={radius} fill="transparent" />
+        {/* Outer separator ring */}
         <circle r={radius - 1} fill="none" stroke="#252836" strokeWidth={1.5} />
-
-        <g>
-          {renderableNodes.map((d) => {
-            const key = pathKey(d);
-            const parent = d.parent as SunburstNode | null;
-            const siblingIndex = parent?.children?.indexOf(d) ?? 0;
-            const local = localPath(d);
-            const fill = colorMode === 'winrate'
-              ? colorForWinRate(winRate(d.data), d.depth)
-              : colorForLocalPath(local, d.depth, siblingIndex, focusPath.length);
-            fillMapRef.current.set(key, fill);
-            return (
-              <path
-                key={key}
-                ref={(el) => {
-                  if (el) pathRefsRef.current.set(key, el);
-                  else pathRefsRef.current.delete(key);
-                }}
-                fill={fill}
-                fillOpacity={1}
-                stroke="#13161f"
-                strokeWidth={1.5}
-                style={{ cursor: 'pointer', display: 'none', WebkitTapHighlightColor: 'transparent' }}
-                onClick={() => handleClickArc(d)}
-                onMouseMove={(ev) => {
-                  setHover({ node: d.data, x: ev.clientX, y: ev.clientY });
-                  evalCache.onHover(d.data.fen);
-                }}
-                onMouseLeave={() => { setHover(null); evalCache.onLeave(); }}
-              />
-            );
-          })}
-        </g>
-
-        <g pointerEvents="none" fill="#fff" style={{ font: `${isMobile ? 14 : 11}px/1 DM Sans, system-ui` }}>
-          {renderableNodes.map((d) => {
-            const key = pathKey(d);
-            return (
-              <text
-                key={'l' + key}
-                ref={(el) => {
-                  if (el) textRefsRef.current.set(key, el);
-                  else textRefsRef.current.delete(key);
-                }}
-                dy="0.35em"
-                textAnchor="middle"
-                style={{
-                  fontWeight: 600,
-                  paintOrder: 'stroke',
-                  stroke: '#000b',
-                  strokeWidth: 2.5,
-                  display: 'none',
-                }}
-              >
-                {d.data.san}
-              </text>
-            );
-          })}
-        </g>
-
-        <circle
-          r={holeRadius}
-          fill="transparent"
-          style={{ cursor: focusPath.length > 0 ? 'pointer' : 'default', WebkitTapHighlightColor: 'transparent' }}
-          onClick={handleZoomOut}
-        />
       </svg>
 
       <CenterBoard
@@ -568,7 +607,6 @@ export function Sunburst({
         y={hover?.y ?? 0}
         totalGames={totalGames}
         eval_={hover ? evalCache.getEval(hover.node.fen) : undefined}
-        centreX={svgRef.current ? svgRef.current.getBoundingClientRect().left + size / 2 : undefined}
       />
 
       {focusPath.length > 0 && isMobile && (
