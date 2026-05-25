@@ -102,6 +102,8 @@ export function Sunburst({
   const colorRef = useRef<Color>(color);
   colorRef.current = color;
   const lastMousePos = useRef<{ x: number; y: number } | null>(null);
+  // Set to true when focusPath changes; cleared after the next hover re-detection.
+  const pendingHoverUpdate = useRef(false);
 
   useImperativeHandle(exportRef, () => ({
     exportPng: async (filename = 'chess-openings.png') => {
@@ -276,33 +278,52 @@ export function Sunburst({
     prevFocusPathRef.current = focusPath;
     ensureRafRunning();
 
-    // After a focus change, re-derive hover from wherever the cursor currently is.
-    if (!sameFocus && lastMousePos.current) {
-      const { x, y } = lastMousePos.current;
-      const el = document.elementFromPoint(x, y);
-      const pathEl = el?.closest?.('path');
-      if (pathEl) {
-        // Find the node whose path element this is.
-        for (const [key, ref] of pathRefsRef.current) {
-          if (ref === pathEl) {
-            const node = nodes.find((n) => pathKey(n) === key);
-            if (node) {
-              setHover({ node: node.data, x, y });
-              evalCache.onHover(node.data.fen);
-            }
-            break;
-          }
-        }
-      } else {
-        setHover(null);
-      }
-    }
+    // Mark that we need to re-derive hover once the new nodes are available.
+    if (!sameFocus) pendingHoverUpdate.current = true;
 
     return () => {
       if (rafRef.current != null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rootData, focusPath.join('>')]);
+
+  // ─── Hover re-detection after focus change ───────────────────────────────
+  // Runs whenever nodes changes (i.e. when new rootData arrives after a click).
+  // Geometrically hit-tests the stored cursor position against the new arc layout.
+  useEffect(() => {
+    if (!pendingHoverUpdate.current) return;
+    if (!lastMousePos.current || !svgRef.current) {
+      pendingHoverUpdate.current = false;
+      return;
+    }
+    pendingHoverUpdate.current = false;
+
+    const { x, y } = lastMousePos.current;
+    const svgRect = svgRef.current.getBoundingClientRect();
+    const svgX = x - svgRect.left - radius;
+    const svgY = y - svgRect.top - radius;
+    const dist = Math.sqrt(svgX * svgX + svgY * svgY);
+    const yUnit = dist / ringRadius;
+    // d3-shape arc: angle 0 = top (−y in SVG coords), increasing clockwise.
+    // atan2(svgX, -svgY) gives 0 at top, π/2 at right — matching d3's convention.
+    let angle = Math.atan2(svgX, -svgY);
+    if (angle < 0) angle += 2 * Math.PI;
+
+    const hit = nodes.find((n) => {
+      if (n.depth === 0 || n.depth > VISIBLE_RINGS) return false;
+      const tgt = targetFor(n);
+      if (yUnit < tgt.y0 || yUnit >= tgt.y1) return false;
+      return angle >= tgt.x0 && angle < tgt.x1;
+    });
+
+    if (hit) {
+      setHover({ node: hit.data, x, y });
+      evalCache.onHover(hit.data.fen);
+    } else {
+      setHover(null);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodes]);
 
   const handleClickArc = (n: SunburstNode) => {
     const local = localPath(n);
