@@ -506,7 +506,7 @@ export function Sunburst({
                 fillOpacity={1}
                 stroke="#13161f"
                 strokeWidth={1.5}
-                style={{ cursor: 'pointer', display: 'none' }}
+                style={{ cursor: 'pointer', display: 'none', WebkitTapHighlightColor: 'transparent' }}
                 onClick={() => handleClickArc(d)}
                 onMouseMove={(ev) => {
                   setHover({ node: d.data, x: ev.clientX, y: ev.clientY });
@@ -518,7 +518,7 @@ export function Sunburst({
           })}
         </g>
 
-        <g pointerEvents="none" fill="#fff" style={{ font: '11px/1 DM Sans, system-ui' }}>
+        <g pointerEvents="none" fill="#fff" style={{ font: `${isMobile ? 14 : 11}px/1 DM Sans, system-ui` }}>
           {renderableNodes.map((d) => {
             const key = pathKey(d);
             return (
@@ -547,7 +547,7 @@ export function Sunburst({
         <circle
           r={holeRadius}
           fill="transparent"
-          style={{ cursor: focusPath.length > 0 ? 'pointer' : 'default' }}
+          style={{ cursor: focusPath.length > 0 ? 'pointer' : 'default', WebkitTapHighlightColor: 'transparent' }}
           onClick={handleZoomOut}
         />
       </svg>

@@ -384,7 +384,7 @@ function App() {
                       size={680}
                       isMobile={isMobile}
                       isNarrow={isNarrow}
-                      visibleRings={isMobile ? 3 : undefined}
+                      visibleRings={isMobile ? 2 : undefined}
                       holeUnits={isMobile ? 7 : undefined}
                       exportRef={sunburstRef}
                       openingName={openingName?.name ?? null}
