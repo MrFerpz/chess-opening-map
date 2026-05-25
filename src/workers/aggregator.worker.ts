@@ -295,6 +295,24 @@ self.addEventListener('message', (ev: MessageEvent<MsgFromMain>) => {
       emitSnapshot();
       return;
     }
+    if (msg.type === 'prefetch') {
+      // Compute snapshot for a child path without disrupting the current state.
+      const games = selectGames(msg.filter, msg.color);
+      const fp = msg.request.focusPath;
+      const totalGames = countMatching(games, fp);
+      const minCount = totalGames <= 10 ? 1 : Math.max(2, Math.floor(totalGames * 0.001));
+      const { root } = buildSubtree(games, fp, msg.request.depth);
+      post({
+        type: 'snapshot',
+        color: msg.color,
+        root: serialise(root, minCount),
+        totalGames,
+        focusPath: [...fp],
+        depth: msg.request.depth,
+        prefetch: true,
+      });
+      return;
+    }
   } catch (err) {
     post({
       type: 'error',

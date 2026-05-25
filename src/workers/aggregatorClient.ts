@@ -26,13 +26,27 @@ export class AggregatorClient {
   private snapshotListeners = new Set<SnapshotListener>();
   private progressListeners = new Set<ProgressListener>();
   private errorListeners = new Set<ErrorListener>();
+  // Keyed by `${color}|${focusPath.join('>')}` — stores prefetched snapshots.
+  private prefetchCache = new Map<string, SnapshotData>();
 
   constructor() {
     this.worker = new AggregatorWorker();
     this.worker.addEventListener('message', (ev: MessageEvent<MsgFromWorker>) => {
       const msg = ev.data;
       if (msg.type === 'snapshot') {
-        for (const l of this.snapshotListeners) l(msg);
+        const snap: SnapshotData = {
+          color: msg.color,
+          root: msg.root,
+          totalGames: msg.totalGames,
+          focusPath: msg.focusPath,
+          depth: msg.depth,
+        };
+        if (msg.prefetch) {
+          const key = `${msg.color}|${msg.focusPath.join('>')}`;
+          this.prefetchCache.set(key, snap);
+        } else {
+          for (const l of this.snapshotListeners) l(snap);
+        }
       } else if (msg.type === 'progress') {
         for (const l of this.progressListeners) l(msg.ingested);
       } else if (msg.type === 'error') {
@@ -46,6 +60,7 @@ export class AggregatorClient {
   }
 
   reset() {
+    this.prefetchCache.clear();
     this.send({ type: 'reset' });
   }
 
@@ -54,7 +69,25 @@ export class AggregatorClient {
   }
 
   requestSnapshot(color: Color, filter: Filter, request: SnapshotRequest) {
-    this.send({ type: 'snapshot', color, filter, request });
+    const key = `${color}|${request.focusPath.join('>')}`;
+    const cached = this.prefetchCache.get(key);
+    if (cached) {
+      // Serve the prefetched result immediately (next microtask so callers
+      // can register listeners before the callback fires).
+      const snap = cached;
+      this.prefetchCache.delete(key);
+      Promise.resolve().then(() => {
+        for (const l of this.snapshotListeners) l(snap);
+      });
+    } else {
+      this.send({ type: 'snapshot', color, filter, request });
+    }
+  }
+
+  prefetchSnapshot(color: Color, filter: Filter, request: SnapshotRequest) {
+    const key = `${color}|${request.focusPath.join('>')}`;
+    if (this.prefetchCache.has(key)) return; // already cached
+    this.send({ type: 'prefetch', color, filter, request });
   }
 
   onSnapshot(l: SnapshotListener): () => void {

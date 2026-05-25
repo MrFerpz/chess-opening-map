@@ -28,11 +28,28 @@ export function useAggregator(
   const focusKeyRef = useRef(request.focusPath.join('>'));
   focusKeyRef.current = request.focusPath.join('>');
 
+  const filterRef = useRef(filter);
+  filterRef.current = filter;
+  const requestRef = useRef(request);
+  requestRef.current = request;
+
   useEffect(() => {
     const offS = client.onSnapshot((s) => {
       if (s.color !== colorRef.current) return;
       if (s.focusPath.join('>') !== focusKeyRef.current) return;
       setSnapshot(s);
+      // Pre-warm the worker for each top child so tapping feels instant.
+      const TOP_N = 5;
+      const topChildren = [...s.root.children]
+        .sort((a, b) => b.count - a.count)
+        .slice(0, TOP_N);
+      for (const child of topChildren) {
+        if (!child.san) continue;
+        client.prefetchSnapshot(colorRef.current, filterRef.current, {
+          focusPath: [...s.focusPath, child.san],
+          depth: requestRef.current.depth,
+        });
+      }
     });
     const offP = client.onProgress(setProgress);
     const offE = client.onError(setError);

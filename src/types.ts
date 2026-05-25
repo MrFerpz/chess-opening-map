@@ -64,6 +64,12 @@ export type MsgFromMain =
       filter: Filter;
       color: Color;
       request: SnapshotRequest;
+    }
+  | {
+      type: 'prefetch';
+      filter: Filter;
+      color: Color;
+      request: SnapshotRequest;
     };
 
 export type MsgFromWorker =
@@ -75,6 +81,7 @@ export type MsgFromWorker =
       totalGames: number;
       focusPath: string[];
       depth: number;
+      prefetch?: boolean;
     }
   | { type: 'error'; message: string };
 
