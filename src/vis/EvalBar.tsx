@@ -16,8 +16,8 @@ function cpToFill(cp: number): number {
 }
 
 export function EvalBar({ eval_, height, loading, horizontal, hideLabel }: Props) {
-  const barThickness = 14;
-  const borderRadius = 7;
+  const barThickness = horizontal ? 14 : 22;
+  const borderRadius = horizontal ? 7 : 3;
 
   let fill = 0.5;
   let isMate = false;
@@ -98,6 +98,18 @@ export function EvalBar({ eval_, height, loading, horizontal, hideLabel }: Props
         <div style={{ height: blackHeight, background: '#1a1d24', transition: 'height 0.4s cubic-bezier(0.4,0,0.2,1)', flexShrink: 0 }} />
         {/* White section (bottom) */}
         <div style={{ flex: 1, background: isMate ? (matePositive ? '#f4d03f' : '#555') : '#e8eaf0', transition: 'background 0.3s ease' }} />
+        {/* 0.0 reference line at the vertical midpoint */}
+        <div style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          top: '50%',
+          transform: 'translateY(-50%)',
+          height: 0,
+          borderTop: '1px dashed #8b8fa3',
+          opacity: 0.85,
+          pointerEvents: 'none',
+        }} />
       </div>
 
       <div style={{ fontSize: 11, fontWeight: 600, color: evalColor, fontFamily: 'inherit', letterSpacing: '-0.01em', minWidth: 28, height: 16, textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

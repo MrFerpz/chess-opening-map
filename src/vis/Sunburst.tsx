@@ -41,6 +41,7 @@ interface Props {
   isMobile?: boolean;
   visibleRings?: number;
   holeUnits?: number;
+  openingName?: string | null;
 }
 
 const ANIM_MS = 350;
@@ -63,6 +64,7 @@ export function Sunburst({
   isMobile,
   visibleRings: visibleRingsProp,
   holeUnits: holeUnitsProp,
+  openingName,
 }: Props) {
   const visibleRings = visibleRingsProp ?? VISIBLE_RINGS;
   const holeUnits = holeUnitsProp ?? HOLE_UNITS;
@@ -402,6 +404,12 @@ export function Sunburst({
 
   const focusFen = rootData.fen || STARTING_FEN;
   focusFenRef.current = focusFen;
+
+  // Top 5 immediate continuations from the focused position, by game count.
+  const topLines = useMemo(
+    () => [...rootData.children].sort((a, b) => b.count - a.count).slice(0, 5),
+    [rootData],
+  );
   const focusEval = evalCache.getEval(focusFen);
   const focusPositionEval = stockfish.getPositionEval(focusFen);
 
@@ -432,8 +440,8 @@ export function Sunburst({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', width: '100%' }}>
-    <div style={{ display: 'flex', alignItems: 'center', gap: 14, width: '100%', overflow: 'hidden' }}>
-    <div ref={containerRef} style={{ position: 'relative', width: '100%', maxWidth: size, height: 'auto', aspectRatio: '1 / 1', margin: '0 auto', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14, width: '100%', overflow: 'visible' }}>
+    <div ref={containerRef} style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: size, height: 'auto', aspectRatio: '1 / 1', margin: '0 auto', overflow: 'visible' }}>
       <svg
         ref={svgRef}
         width={size}
@@ -536,6 +544,97 @@ export function Sunburst({
         <div style={{ position: 'absolute', left: 12, top: 12, display: 'flex', gap: 10 }}>
           <ArrowLeft size={20} style={{ cursor: 'pointer', color: '#c8cad8', opacity: 0.8 }} onClick={handleZoomOut} aria-label="Back one move" />
           <ArrowLeftFromLine size={20} style={{ cursor: 'pointer', color: '#c8cad8', opacity: 0.8 }} onClick={handleReset} aria-label="Reset to start" />
+        </div>
+      )}
+
+      {/* Top-left: position info — pushed ~half its width out past the chart's left edge,
+          into the gutter so it sits clear of the rings. */}
+      {!isMobile && (
+        <div style={{
+          position: 'absolute',
+          left: -75,
+          top: focusPath.length > 0 ? 38 : 6,
+          width: 150,
+          boxSizing: 'border-box',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 3,
+          pointerEvents: 'none',
+        }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.01em' }}>
+            {totalGames.toLocaleString()} games
+          </span>
+          <span style={{ fontSize: 10.5, color: 'var(--text-dim)', lineHeight: 1.35, wordBreak: 'break-word' }}>
+            Depth {focusPath.length} · {focusPath.length === 0 ? 'start' : focusPath.join(' ')}
+          </span>
+          {openingName && (
+            <span style={{ fontSize: 10.5, color: 'var(--text-muted)', fontStyle: 'italic', lineHeight: 1.35, marginTop: 1 }}>
+              {openingName}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Top-right: top lines panel — pushed ~half its width out past the chart's right edge,
+          into the gutter beside the eval bar so it sits clear of the rings. */}
+      {!isMobile && topLines.length > 0 && (
+        <div style={{
+          position: 'absolute',
+          right: -110,
+          top: 6,
+          width: 158,
+          boxSizing: 'border-box',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 5,
+        }}>
+          <span style={{
+            fontSize: 10,
+            fontWeight: 700,
+            textTransform: 'uppercase',
+            letterSpacing: '0.1em',
+            color: 'var(--text-dim)',
+            marginBottom: 1,
+            textAlign: 'right',
+          }}>
+            Top Lines
+          </span>
+          {topLines.map((line, i) => {
+            const lTotal = line.wins + line.draws + line.losses;
+            const winPct = lTotal > 0 ? (line.wins / lTotal) * 100 : 0;
+            const drawPct = lTotal > 0 ? (line.draws / lTotal) * 100 : 0;
+            const lossPct = lTotal > 0 ? (line.losses / lTotal) * 100 : 0;
+            const sharePct = totalGames > 0 ? Math.round((line.count / totalGames) * 100) : 0;
+            return (
+              <div
+                key={(line.san ?? '?') + i}
+                onClick={() => {
+                  if (!line.san) return;
+                  const target = nodes.find((n) => n.depth === 1 && n.data.san === line.san);
+                  if (target) handleClickArc(target);
+                }}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 2,
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  cursor: line.san ? 'pointer' : 'default',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, fontSize: 11, width: '100%' }}>
+                  <span style={{ fontWeight: 700, color: 'var(--text)', flexShrink: 0 }}>{line.san ?? '—'}</span>
+                  <span style={{ color: 'var(--text-muted)', flex: 1, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{line.count.toLocaleString()}</span>
+                  <span style={{ color: 'var(--text-dim)', fontVariantNumeric: 'tabular-nums', minWidth: 30, textAlign: 'right' }}>{sharePct}%</span>
+                </div>
+                <div style={{ display: 'flex', height: 5, width: '100%', borderRadius: 2, overflow: 'hidden', background: 'var(--surface)' }}>
+                  <div style={{ width: `${winPct}%`, background: 'var(--win)' }} />
+                  <div style={{ width: `${drawPct}%`, background: 'var(--text-dim)' }} />
+                  <div style={{ width: `${lossPct}%`, background: 'var(--loss)' }} />
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

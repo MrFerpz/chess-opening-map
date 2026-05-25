@@ -285,7 +285,9 @@ function App() {
                 </div>
               )}
 
-              {sync.status === 'done' && total > 0 && (
+              {/* Position info — desktop shows it as a chart corner overlay (see Sunburst);
+                  on mobile there is no corner space, so keep it in the sidebar. */}
+              {isMobile && sync.status === 'done' && total > 0 && (
                 <div style={{ color: 'var(--text-muted)', fontSize: 12, padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <span>{total.toLocaleString()} games</span>
                   <span style={{ color: 'var(--text-dim)' }}>
@@ -327,6 +329,7 @@ function App() {
                   visibleRings={isMobile ? 3 : undefined}
                   holeUnits={isMobile ? 7 : undefined}
                   exportRef={sunburstRef}
+                  openingName={openingName?.name ?? null}
                 />
               ) : sync.status === 'done' ? (
                 <div style={{ color: 'var(--text-muted)', padding: 48, fontSize: 14 }}>
