@@ -30,6 +30,14 @@ export interface SunburstHandle {
   exportPng: (filename?: string) => Promise<void>;
 }
 
+export interface TopLine {
+  san: string | null;
+  count: number;
+  wins: number;
+  draws: number;
+  losses: number;
+}
+
 interface Props {
   root: SerializedNode;
   totalGames: number;
@@ -39,9 +47,11 @@ interface Props {
   size?: number;
   exportRef?: React.Ref<SunburstHandle>;
   isMobile?: boolean;
+  isNarrow?: boolean;
   visibleRings?: number;
   holeUnits?: number;
   openingName?: string | null;
+  onTopLinesChange?: (lines: TopLine[]) => void;
 }
 
 const ANIM_MS = 350;
@@ -62,9 +72,11 @@ export function Sunburst({
   size = 720,
   exportRef,
   isMobile,
+  isNarrow,
   visibleRings: visibleRingsProp,
   holeUnits: holeUnitsProp,
   openingName,
+  onTopLinesChange,
 }: Props) {
   const visibleRings = visibleRingsProp ?? VISIBLE_RINGS;
   const holeUnits = holeUnitsProp ?? HOLE_UNITS;
@@ -410,6 +422,10 @@ export function Sunburst({
     () => [...rootData.children].sort((a, b) => b.count - a.count).slice(0, 5),
     [rootData],
   );
+
+  useEffect(() => {
+    if (onTopLinesChange) onTopLinesChange(topLines);
+  }, [topLines, onTopLinesChange]);
   const focusEval = evalCache.getEval(focusFen);
   const focusPositionEval = stockfish.getPositionEval(focusFen);
 
@@ -540,44 +556,51 @@ export function Sunburst({
         centreX={svgRef.current ? svgRef.current.getBoundingClientRect().left + size / 2 : undefined}
       />
 
-      {focusPath.length > 0 && (
+      {focusPath.length > 0 && isMobile && (
         <div style={{ position: 'absolute', left: 12, top: 12, display: 'flex', gap: 10 }}>
           <ArrowLeft size={20} style={{ cursor: 'pointer', color: '#c8cad8', opacity: 0.8 }} onClick={handleZoomOut} aria-label="Back one move" />
           <ArrowLeftFromLine size={20} style={{ cursor: 'pointer', color: '#c8cad8', opacity: 0.8 }} onClick={handleReset} aria-label="Reset to start" />
         </div>
       )}
 
-      {/* Top-left: position info — pushed ~half its width out past the chart's left edge,
-          into the gutter so it sits clear of the rings. */}
-      {!isMobile && (
+      {/* Top-left: back arrows + position info in the gutter, clear of the rings. Hidden on narrow/mobile (shown in sidebar). */}
+      {!isMobile && !isNarrow && (
         <div style={{
           position: 'absolute',
           left: -75,
-          top: focusPath.length > 0 ? 38 : 6,
+          top: 6,
           width: 150,
           boxSizing: 'border-box',
           display: 'flex',
           flexDirection: 'column',
-          gap: 3,
+          gap: 6,
           pointerEvents: 'none',
         }}>
-          <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.01em' }}>
-            {totalGames.toLocaleString()} games
-          </span>
-          <span style={{ fontSize: 10.5, color: 'var(--text-dim)', lineHeight: 1.35, wordBreak: 'break-word' }}>
-            Depth {focusPath.length} · {focusPath.length === 0 ? 'start' : focusPath.join(' ')}
-          </span>
-          {openingName && (
-            <span style={{ fontSize: 10.5, color: 'var(--text-muted)', fontStyle: 'italic', lineHeight: 1.35, marginTop: 1 }}>
-              {openingName}
-            </span>
+          {focusPath.length > 0 && (
+            <div style={{ display: 'flex', gap: 10, pointerEvents: 'auto' }}>
+              <ArrowLeft size={20} style={{ cursor: 'pointer', color: '#c8cad8', opacity: 0.8 }} onClick={handleZoomOut} aria-label="Back one move" />
+              <ArrowLeftFromLine size={20} style={{ cursor: 'pointer', color: '#c8cad8', opacity: 0.8 }} onClick={handleReset} aria-label="Reset to start" />
+            </div>
           )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.01em' }}>
+              {totalGames.toLocaleString()} games
+            </span>
+            <span style={{ fontSize: 10.5, color: 'var(--text-dim)', lineHeight: 1.35, wordBreak: 'break-word' }}>
+              Depth {focusPath.length} · {focusPath.length === 0 ? 'start' : focusPath.join(' ')}
+            </span>
+            {openingName && (
+              <span style={{ fontSize: 10.5, color: 'var(--text-muted)', fontStyle: 'italic', lineHeight: 1.35, marginTop: 1 }}>
+                {openingName}
+              </span>
+            )}
+          </div>
         </div>
       )}
 
       {/* Top-right: top lines panel — pushed ~half its width out past the chart's right edge,
-          into the gutter beside the eval bar so it sits clear of the rings. */}
-      {!isMobile && topLines.length > 0 && (
+          into the gutter beside the eval bar so it sits clear of the rings. Hidden on narrow/mobile. */}
+      {!isMobile && !isNarrow && topLines.length > 0 && (
         <div style={{
           position: 'absolute',
           right: -110,
@@ -638,8 +661,13 @@ export function Sunburst({
         </div>
       )}
     </div>
-    {!isMobile && <EvalBar eval_={focusEval} height={size * 0.7} />}
+    {!isMobile && !isNarrow && <EvalBar eval_={focusEval} height={size * 0.7} />}
     </div>
+    {isNarrow && (
+      <div style={{ width: '100%', maxWidth: size, margin: '10px auto 0', boxSizing: 'border-box' }}>
+        <EvalBar eval_={focusEval} height={0} horizontal />
+      </div>
+    )}
     {isMobile && mobileInfo && (() => {
       const node = mobileInfo;
       const eval_ = evalCache.getEval(node.fen);

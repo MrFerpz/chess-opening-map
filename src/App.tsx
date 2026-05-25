@@ -6,7 +6,7 @@ import { SunburstSkeleton } from './ui/SunburstSkeleton';
 import { Filters } from './ui/Filters';
 import { ColorToggle } from './ui/ColorToggle';
 import { LoadingBoard } from './ui/LoadingBoard';
-import { Sunburst } from './vis/Sunburst';
+import { Sunburst, type TopLine } from './vis/Sunburst';
 import type { SunburstHandle } from './vis/Sunburst';
 import { GameReplay } from './vis/GameReplay';
 import { useAggregator, EMPTY_ROOT } from './hooks/useAggregator';
@@ -41,6 +41,7 @@ function useWindowWidth() {
 function App() {
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth < 768;
+  const isNarrow = windowWidth < 1200 && !isMobile;
   const [session, setSession] = useState<Session | null>(() => {
     const s = decodeShareUrl();
     return s ? { platform: s.platform, username: s.username } : null;
@@ -53,6 +54,7 @@ function App() {
   const [confirmRefresh, setConfirmRefresh] = useState(false);
   const [fullGameMoves, setFullGameMoves] = useState<string[] | null>(null);
   const [fullGameId, setFullGameId] = useState<string | null>(null);
+  const [narrowTopLines, setNarrowTopLines] = useState<TopLine[]>([]);
   const sunburstRef = useRef<SunburstHandle>(null);
 
   const request: SnapshotRequest = useMemo(
@@ -285,19 +287,49 @@ function App() {
                 </div>
               )}
 
-              {/* Position info — desktop shows it as a chart corner overlay (see Sunburst);
-                  on mobile there is no corner space, so keep it in the sidebar. */}
+              {/* Position info — on mobile there is no corner space, so keep it in the sidebar.
+                  On narrow/desktop it's shown as a chart corner overlay (see Sunburst). */}
               {isMobile && sync.status === 'done' && total > 0 && (
                 <div style={{ color: 'var(--text-muted)', fontSize: 12, padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <span>{total.toLocaleString()} games</span>
-                  <span style={{ color: 'var(--text-dim)' }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.01em' }}>{total.toLocaleString()} games</span>
+                  <span style={{ color: 'var(--text-dim)', fontSize: 10.5 }}>
                     Depth {focusPath.length} · {focusPath.length === 0 ? 'start' : focusPath.join(' ')}
                   </span>
                   {openingName && (
-                    <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', marginTop: 2 }}>
+                    <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', marginTop: 2, fontSize: 10.5 }}>
                       {openingName.name}
                     </span>
                   )}
+                </div>
+              )}
+
+              {/* Top lines — shown in sidebar when narrow (eval bar + top-lines overlays are hidden on chart) */}
+              {isNarrow && sync.status === 'done' && total > 1 && narrowTopLines.length > 0 && (
+                <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-dim)', marginBottom: 2 }}>
+                    Top Lines
+                  </span>
+                  {narrowTopLines.map((line, i) => {
+                    const lTotal = line.wins + line.draws + line.losses;
+                    const winPct = lTotal > 0 ? (line.wins / lTotal) * 100 : 0;
+                    const drawPct = lTotal > 0 ? (line.draws / lTotal) * 100 : 0;
+                    const lossPct = lTotal > 0 ? (line.losses / lTotal) * 100 : 0;
+                    const sharePct = total > 0 ? Math.round((line.count / total) * 100) : 0;
+                    return (
+                      <div key={(line.san ?? '?') + i} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, fontSize: 11 }}>
+                          <span style={{ fontWeight: 700, color: 'var(--text)', flexShrink: 0 }}>{line.san ?? '—'}</span>
+                          <span style={{ color: 'var(--text-muted)', flex: 1, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{line.count.toLocaleString()}</span>
+                          <span style={{ color: 'var(--text-dim)', fontVariantNumeric: 'tabular-nums', minWidth: 30, textAlign: 'right' }}>{sharePct}%</span>
+                        </div>
+                        <div style={{ display: 'flex', height: 5, width: '100%', borderRadius: 2, overflow: 'hidden', background: 'var(--surface)' }}>
+                          <div style={{ width: `${winPct}%`, background: 'var(--win)' }} />
+                          <div style={{ width: `${drawPct}%`, background: 'var(--text-dim)' }} />
+                          <div style={{ width: `${lossPct}%`, background: 'var(--loss)' }} />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </aside>
@@ -326,10 +358,12 @@ function App() {
                   onFocusChange={setFocusPath}
                   size={680}
                   isMobile={isMobile}
+                  isNarrow={isNarrow}
                   visibleRings={isMobile ? 3 : undefined}
                   holeUnits={isMobile ? 7 : undefined}
                   exportRef={sunburstRef}
                   openingName={openingName?.name ?? null}
+                  onTopLinesChange={setNarrowTopLines}
                 />
               ) : sync.status === 'done' ? (
                 <div style={{ color: 'var(--text-muted)', padding: 48, fontSize: 14 }}>
