@@ -17,7 +17,7 @@ import {
   type Rect,
   type SunburstNode,
 } from './sunburstLayout';
-import { colorForLocalPath, winRate } from './colorScale';
+import { colorForLocalPath, colorForWinRate, winRate } from './colorScale';
 import { CenterBoard } from './CenterBoard';
 import { Tooltip } from './Tooltip';
 import { EvalBar } from './EvalBar';
@@ -38,10 +38,13 @@ export interface TopLine {
   losses: number;
 }
 
+export type ColorMode = 'opening' | 'winrate';
+
 interface Props {
   root: SerializedNode;
   totalGames: number;
   color: Color;
+  colorMode?: ColorMode;
   focusPath: string[];
   onFocusChange: (newPath: string[]) => void;
   size?: number;
@@ -67,6 +70,7 @@ export function Sunburst({
   root: rootData,
   totalGames,
   color,
+  colorMode = 'opening',
   focusPath,
   onFocusChange,
   size = 720,
@@ -405,6 +409,15 @@ export function Sunburst({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusPath]);
 
+  // When colorMode changes, update fills for all currently-rendered arcs imperatively.
+  useEffect(() => {
+    for (const [key, pathEl] of pathRefsRef.current) {
+      const fill = fillMapRef.current.get(key);
+      if (fill) pathEl.setAttribute('fill', fill);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [colorMode]);
+
   // ─── Initial render — stable SVG skeleton ────────────────────────────────
   // React renders <path> / <text> elements once per node set change.
   // The rAF loop mutates their attributes directly; React never touches them again
@@ -478,7 +491,9 @@ export function Sunburst({
             const parent = d.parent as SunburstNode | null;
             const siblingIndex = parent?.children?.indexOf(d) ?? 0;
             const local = localPath(d);
-            const fill = colorForLocalPath(local, d.depth, siblingIndex, focusPath.length);
+            const fill = colorMode === 'winrate'
+              ? colorForWinRate(winRate(d.data), d.depth)
+              : colorForLocalPath(local, d.depth, siblingIndex, focusPath.length);
             fillMapRef.current.set(key, fill);
             return (
               <path
@@ -627,7 +642,8 @@ export function Sunburst({
             const winPct = lTotal > 0 ? (line.wins / lTotal) * 100 : 0;
             const drawPct = lTotal > 0 ? (line.draws / lTotal) * 100 : 0;
             const lossPct = lTotal > 0 ? (line.losses / lTotal) * 100 : 0;
-            const sharePct = totalGames > 0 ? Math.round((line.count / totalGames) * 100) : 0;
+            const wrPct = lTotal > 0 ? Math.round((line.wins + 0.5 * line.draws) / lTotal * 100) : 0;
+            const wrColor = wrPct >= 55 ? 'var(--win)' : wrPct <= 45 ? 'var(--loss)' : 'var(--text-dim)';
             return (
               <div
                 key={(line.san ?? '?') + i}
@@ -648,7 +664,7 @@ export function Sunburst({
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, fontSize: 11, width: '100%' }}>
                   <span style={{ fontWeight: 700, color: 'var(--text)', flexShrink: 0 }}>{line.san ?? '—'}</span>
                   <span style={{ color: 'var(--text-muted)', flex: 1, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{line.count.toLocaleString()}</span>
-                  <span style={{ color: 'var(--text-dim)', fontVariantNumeric: 'tabular-nums', minWidth: 30, textAlign: 'right' }}>{sharePct}%</span>
+                  <span style={{ color: wrColor, fontVariantNumeric: 'tabular-nums', minWidth: 30, textAlign: 'right', fontWeight: 600 }}>{wrPct}%</span>
                 </div>
                 <div style={{ display: 'flex', height: 5, width: '100%', borderRadius: 2, overflow: 'hidden', background: 'var(--surface)' }}>
                   <div style={{ width: `${winPct}%`, background: 'var(--win)' }} />

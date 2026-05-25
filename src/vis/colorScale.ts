@@ -35,10 +35,24 @@ export function avgOppRating(n: SerializedNode): number | null {
   return Math.round(n.oppRatingSum / n.oppRatingCount);
 }
 
+// Maps win rate [0..1] to a red → muted gold → green HCL gradient.
+// ±15pp from 50% saturates the scale so realistic spreads (e.g. 45–65%) read clearly.
+export function colorForWinRate(rate: number, depthFromFocus: number): string {
+  const clamped = Math.max(0, Math.min(1, rate));
+  // Clamp deviation to ±0.15 (15pp) then normalise to [-1, 1].
+  const SCALE = 0.06;
+  const t = Math.max(-1, Math.min(1, (clamped - 0.5) / SCALE));
+  // Hue: green (140°) winning, red (20°) losing.
+  const hue = t >= 0 ? 140 : 20;
+  // Chroma of 0 at neutral gives true grey; ramps up quickly with deviation.
+  const chroma = Math.abs(t) * (40 + Math.min(depthFromFocus, 5) * 3);
+  const lightness = 50 + Math.abs(t) * 12;
+  return hcl(hue, chroma, lightness).formatHex();
+}
+
 // Colour for a node based on the **local** path under the focus root.
 // localPath[0] = the first ply of the visible subtree → defines the hue family.
 // Lightness alternates by global ply: lighter = white's move, darker = black's move.
-// globalPly = focusPathLength + depthFromFocus (1-indexed: ply 1,3,5… = white; 2,4,6… = black).
 export function colorForLocalPath(
   localPath: string[],
   depthFromFocus: number,

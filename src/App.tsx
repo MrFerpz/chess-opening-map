@@ -6,7 +6,7 @@ import { SunburstSkeleton } from './ui/SunburstSkeleton';
 import { Filters } from './ui/Filters';
 import { ColorToggle } from './ui/ColorToggle';
 import { LoadingBoard } from './ui/LoadingBoard';
-import { Sunburst, type TopLine } from './vis/Sunburst';
+import { Sunburst, type TopLine, type ColorMode } from './vis/Sunburst';
 import type { SunburstHandle } from './vis/Sunburst';
 import { GameReplay } from './vis/GameReplay';
 import { useAggregator, EMPTY_ROOT } from './hooks/useAggregator';
@@ -55,6 +55,7 @@ function App() {
   const [fullGameMoves, setFullGameMoves] = useState<string[] | null>(null);
   const [fullGameId, setFullGameId] = useState<string | null>(null);
   const [narrowTopLines, setNarrowTopLines] = useState<TopLine[]>([]);
+  const [colorMode, setColorMode] = useState<ColorMode>('opening');
   const sunburstRef = useRef<SunburstHandle>(null);
 
   const request: SnapshotRequest = useMemo(
@@ -228,6 +229,34 @@ function App() {
                   <label style={controlLabelStyle}>Playing as</label>
                   <ColorToggle value={color} onChange={setColor} />
                 </div>
+                <div style={{ marginBottom: 14 }}>
+                  <label style={controlLabelStyle}>Colour by</label>
+                  <div style={{ display: 'inline-flex', borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border)' }}>
+                    {(['opening', 'winrate'] as const).map((mode) => {
+                      const active = colorMode === mode;
+                      return (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => setColorMode(mode)}
+                          className="chip-btn"
+                          style={{
+                            background: active ? 'var(--accent)' : 'transparent',
+                            color: active ? '#111' : 'var(--text-muted)',
+                            border: 'none',
+                            padding: '6px 16px',
+                            cursor: 'pointer',
+                            fontSize: 13,
+                            fontWeight: active ? 600 : 400,
+                            transition: 'background 0.15s, color 0.15s',
+                          }}
+                        >
+                          {mode === 'opening' ? 'Opening' : 'Win rate'}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
                 <div>
                   <label style={controlLabelStyle}>Filters</label>
                   <Filters value={filter} onChange={setFilter} />
@@ -354,6 +383,7 @@ function App() {
                   root={root}
                   totalGames={total}
                   color={color}
+                  colorMode={colorMode}
                   focusPath={snapshotFocusPath}
                   onFocusChange={setFocusPath}
                   size={680}
