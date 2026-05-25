@@ -8,14 +8,19 @@ export type EvalResult =
 // Module-level cache shared across renders.
 const cache = new Map<string, EvalResult | null>();
 
-// Fetch a single FEN from Lichess cloud eval. Returns null if not found.
-async function fetchCloud(fen: string, signal?: AbortSignal): Promise<EvalResult | null> {
+// Sentinel: fetch failed transiently (rate limit, network error) — don't cache.
+const TRANSIENT = Symbol('transient');
+
+// Fetch a single FEN from Lichess cloud eval.
+// Returns null if genuinely not found (404), TRANSIENT if we should retry.
+async function fetchCloud(fen: string, signal?: AbortSignal): Promise<EvalResult | null | typeof TRANSIENT> {
   try {
     const r = await fetch(
       `https://lichess.org/api/cloud-eval?fen=${encodeURIComponent(fen)}&multiPv=1`,
       { signal },
     );
-    if (!r.ok) return null;
+    if (r.status === 404) return null; // position not in DB — definitive
+    if (!r.ok) return TRANSIENT;       // 429 rate limit or other transient error
     const data = await r.json();
     if (!data?.pvs?.length) return null;
     const pv = data.pvs[0];
@@ -23,7 +28,7 @@ async function fetchCloud(fen: string, signal?: AbortSignal): Promise<EvalResult
     if (pv.mate !== undefined) return { type: 'mate', value: pv.mate };
     return null;
   } catch {
-    return null;
+    return TRANSIENT;
   }
 }
 
@@ -81,9 +86,9 @@ export function useEvalCache(root: SerializedNode | null) {
     (async () => {
       for (const fen of uncached) {
         if (cancelled) break;
-        if (cache.has(fen)) continue; // may have been filled by a concurrent hover
+        if (cache.has(fen)) continue;
         const result = await fetchCloud(fen);
-        if (!cancelled) store(fen, result);
+        if (!cancelled && result !== TRANSIENT) store(fen, result);
       }
     })();
     return () => { cancelled = true; };
@@ -99,8 +104,15 @@ export function useEvalCache(root: SerializedNode | null) {
       const ctrl = new AbortController();
       hoverAbortRef.current = ctrl;
       const result = await fetchCloud(fen, ctrl.signal);
-      store(fen, result);
+      if (result !== TRANSIENT) store(fen, result);
     }, 400);
+  }, [store]);
+
+  // Immediate fetch with no debounce — for pre-fetching known positions.
+  const prefetch = useCallback(async (fen: string) => {
+    if (cache.has(fen)) return;
+    const result = await fetchCloud(fen);
+    if (result !== TRANSIENT) store(fen, result);
   }, [store]);
 
   const onLeave = useCallback(() => {
@@ -114,7 +126,7 @@ export function useEvalCache(root: SerializedNode | null) {
     return undefined; // not fetched yet
   }, [evals]);
 
-  return { getEval, onHover, onLeave };
+  return { getEval, onHover, onLeave, prefetch };
 }
 
 export function formatEval(e: EvalResult): string {

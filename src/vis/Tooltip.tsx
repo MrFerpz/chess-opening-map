@@ -10,9 +10,10 @@ interface Props {
   y: number;
   totalGames: number;
   eval_: EvalResult | null | undefined;
+  centreX?: number;
 }
 
-export function Tooltip({ node, x, y, totalGames, eval_ }: Props) {
+export function Tooltip({ node, x, y, totalGames, eval_, centreX }: Props) {
   if (!node) return null;
 
   const wr = Math.round(winRate(node) * 100);
@@ -35,12 +36,17 @@ export function Tooltip({ node, x, y, totalGames, eval_ }: Props) {
     : eval_ === null ? '—'
     : formatEval(eval_);
 
+  const tooltipW = 200;
+  const tooltipH = 120;
+  const flipX = centreX != null ? x < centreX : x + 14 + tooltipW > window.innerWidth - 8;
+  const flipY = y + 14 + tooltipH > window.innerHeight - 8;
+
   return (
     <div
       style={{
         position: 'fixed',
-        left: x + 14,
-        top: y + 14,
+        left: flipX ? x - tooltipW - 14 : x + 14,
+        top: flipY ? y - tooltipH - 14 : y + 14,
         background: 'rgba(13,15,22,0.97)',
         border: '1px solid var(--border)',
         color: 'var(--text)',

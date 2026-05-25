@@ -55,6 +55,7 @@ function App() {
   const [reloadCount, setReloadCount] = useState(0);
   const [copyLabel, setCopyLabel] = useState<'Copy link' | 'Copied!'>('Copy link');
   const [fullGameMoves, setFullGameMoves] = useState<string[] | null>(null);
+  const [fullGameId, setFullGameId] = useState<string | null>(null);
   const sunburstRef = useRef<SunburstHandle>(null);
 
   const request: SnapshotRequest = useMemo(
@@ -113,9 +114,10 @@ function App() {
 
   useEffect(() => {
     setFullGameMoves(null);
+    setFullGameId(null);
     if (!session || total !== 1) return;
     void findGameByMoves(session.platform, session.username, focusPath).then((game) => {
-      if (game) setFullGameMoves(game.moves);
+      if (game) { setFullGameMoves(game.moves); setFullGameId(game.id); }
     });
   }, [session, total, focusPath]);
 
@@ -296,7 +298,7 @@ function App() {
                       : extractRemainingMoves(root)
                   }
                   orientation={color}
-                  onBack={() => setFocusPath(focusPath.slice(0, -1))}
+                  gameId={fullGameId ?? undefined}
                   onBackToChart={() => setFocusPath([])}
                 />
               ) : sync.status === 'done' && total > 1 ? (

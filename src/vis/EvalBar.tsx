@@ -4,6 +4,7 @@ import { formatEval } from '../hooks/useCloudEval';
 interface Props {
   eval_: EvalResult | null | undefined;
   height: number;
+  loading?: boolean;
 }
 
 // Map centipawn value to a 0–1 fill ratio (white's advantage).
@@ -14,7 +15,7 @@ function cpToFill(cp: number): number {
   return (clamped + CLAMP) / (CLAMP * 2);
 }
 
-export function EvalBar({ eval_, height }: Props) {
+export function EvalBar({ eval_, height, loading }: Props) {
   const barWidth = 14;
   const borderRadius = 7;
 
@@ -91,7 +92,7 @@ export function EvalBar({ eval_, height }: Props) {
         />
       </div>
 
-      {/* Eval label */}
+      {/* Eval label — always same size to avoid layout shift */}
       <div
         style={{
           fontSize: 11,
@@ -99,13 +100,22 @@ export function EvalBar({ eval_, height }: Props) {
           color: evalColor,
           fontFamily: 'inherit',
           letterSpacing: '-0.01em',
-          writingMode: 'horizontal-tb',
           minWidth: 28,
+          height: 16,
           textAlign: 'center',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
       >
-        {evalStr}
+        {loading
+          ? <div style={{ width: 10, height: 10, borderRadius: '50%', border: '1.5px solid var(--border)', borderTopColor: 'var(--text-muted)', animation: 'spin 0.7s linear infinite', flexShrink: 0 }} />
+          : eval_ == null
+          ? null
+          : formatEval(eval_)
+        }
       </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

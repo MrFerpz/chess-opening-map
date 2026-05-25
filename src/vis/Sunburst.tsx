@@ -425,6 +425,7 @@ export function Sunburst({
         y={hover?.y ?? 0}
         totalGames={totalGames}
         eval_={hover ? evalCache.getEval(hover.node.fen) : undefined}
+        centreX={svgRef.current ? svgRef.current.getBoundingClientRect().left + size / 2 : undefined}
       />
 
       {focusPath.length > 0 && (
