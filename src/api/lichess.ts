@@ -83,6 +83,14 @@ function normalise(raw: LichessGame, username: string): Game | null {
   };
 }
 
+export async function checkLichessUser(username: string): Promise<boolean> {
+  const res = await fetch(
+    `https://lichess.org/api/user/${encodeURIComponent(username)}`,
+    { headers: { Accept: 'application/json' } },
+  );
+  return res.ok;
+}
+
 export async function* fetchLichess(
   username: string,
   since?: number,

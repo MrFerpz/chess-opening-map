@@ -16,6 +16,7 @@ import { useOpeningName } from './hooks/useOpeningName';
 import { clearUser, findGameByMoves } from './store/cache';
 import { encodeShareUrl, decodeShareUrl } from './lib/shareUrl';
 import { ConfirmModal } from './ui/ConfirmModal';
+import { checkUserExists } from './api/platform';
 
 interface Session {
   platform: Platform;
@@ -462,6 +463,26 @@ function LandingView({ onSubmit, isMobile }: {
   onSubmit: (p: Platform, u: string) => void;
   isMobile: boolean;
 }) {
+  const [checking, setChecking] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const handleSubmit = async (platform: Platform, username: string) => {
+    setError(null);
+    setChecking(true);
+    try {
+      const exists = await checkUserExists(platform, username);
+      if (!exists) {
+        setError(`User "${username}" not found on ${platform === 'chesscom' ? 'Chess.com' : 'Lichess'}.`);
+        return;
+      }
+      onSubmit(platform, username);
+    } catch {
+      setError('Could not reach the server. Please try again.');
+    } finally {
+      setChecking(false);
+    }
+  };
+
   return (
     <div
       style={{
@@ -491,7 +512,7 @@ function LandingView({ onSubmit, isMobile }: {
             Visualise your most-played openings as white and black
           </p>
         </div>
-        <UserForm onSubmit={onSubmit} isMobile={isMobile} />
+        <UserForm onSubmit={handleSubmit} checking={checking} error={error} isMobile={isMobile} />
       </div>
     </div>
   );

@@ -3,8 +3,10 @@ import { X } from 'lucide-react';
 import type { Platform } from '../types';
 
 interface Props {
-  onSubmit: (platform: Platform, username: string) => void;
+  onSubmit: (platform: Platform, username: string) => void | Promise<void>;
   disabled?: boolean;
+  checking?: boolean;
+  error?: string | null;
   isMobile?: boolean;
 }
 
@@ -36,21 +38,21 @@ function removeFromHistory(platform: Platform, username: string) {
   localStorage.setItem(HISTORY_KEY, JSON.stringify({ ...all, [platform]: list }));
 }
 
-export function UserForm({ onSubmit, disabled, isMobile }: Props) {
+export function UserForm({ onSubmit, disabled, checking, error, isMobile }: Props) {
   const [platform, setPlatform] = useState<Platform>('lichess');
   const [username, setUsername] = useState('');
   const [history, setHistory] = useState<Record<Platform, string[]>>(loadHistory);
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    go(username.trim());
+    void go(username.trim());
   };
 
-  const go = (u: string) => {
+  const go = async (u: string) => {
     if (!u) return;
+    await onSubmit(platform, u);
     saveToHistory(platform, u);
     setHistory(loadHistory());
-    onSubmit(platform, u);
   };
 
   const removeSuggestion = (u: string) => {
@@ -129,25 +131,33 @@ export function UserForm({ onSubmit, disabled, isMobile }: Props) {
         />
         <button
           type="submit"
-          disabled={disabled || !username.trim()}
+          disabled={disabled || checking || !username.trim()}
           style={{
             background: username.trim() ? 'var(--accent)' : 'var(--surface-raised)',
             color: username.trim() ? '#111' : 'var(--text-dim)',
             border: 'none',
             padding: '11px 28px',
             borderRadius: 8,
-            cursor: username.trim() ? 'pointer' : 'not-allowed',
+            cursor: (username.trim() && !checking) ? 'pointer' : 'not-allowed',
             fontSize: 14,
             fontWeight: 700,
             fontFamily: 'inherit',
             transition: 'background 0.15s, color 0.15s',
+            minWidth: 72,
           }}
-          onMouseEnter={(e) => { if (username.trim()) e.currentTarget.style.background = 'var(--accent-hover)'; }}
+          onMouseEnter={(e) => { if (username.trim() && !checking) e.currentTarget.style.background = 'var(--accent-hover)'; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = username.trim() ? 'var(--accent)' : 'var(--surface-raised)'; }}
         >
-          Go
+          {checking ? '…' : 'Go'}
         </button>
       </div>
+
+      {/* Error message */}
+      {error && (
+        <div style={{ fontSize: 13, color: '#f87171', padding: '2px 2px' }}>
+          {error}
+        </div>
+      )}
 
       {/* Recent searches — always rendered to avoid layout shift */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: -4, minHeight: 30 }}>
@@ -168,7 +178,7 @@ export function UserForm({ onSubmit, disabled, isMobile }: Props) {
               <button
                 type="button"
                 disabled={disabled}
-                onClick={() => go(u)}
+                onClick={() => { void go(u); }}
                 style={{
                   padding: '4px 6px 4px 12px',
                   border: 'none',

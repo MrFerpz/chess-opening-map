@@ -89,6 +89,14 @@ function normalise(raw: ChessComGame, username: string): Game | null {
   };
 }
 
+export async function checkChessComUser(username: string): Promise<boolean> {
+  const res = await fetch(
+    `https://api.chess.com/pub/player/${encodeURIComponent(username)}`,
+    { method: 'HEAD' },
+  );
+  return res.ok;
+}
+
 export async function* fetchChessCom(
   username: string,
   since?: number,
