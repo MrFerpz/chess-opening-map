@@ -189,7 +189,7 @@ export function LoadingBoard({ state, isMobile }: Props) {
         <div
           style={{
             position: 'absolute',
-            top: boardOffset - 56,
+            top: boardOffset - 90,
             left: 0,
             right: 0,
             display: 'flex',
@@ -206,7 +206,7 @@ export function LoadingBoard({ state, isMobile }: Props) {
             <circle cx="14" cy="14" r="11" fill="none" stroke="var(--accent)" strokeWidth="3"
               strokeDasharray="44" strokeDashoffset="33" strokeLinecap="round" />
           </svg>
-          <div style={{ color: 'var(--text-muted)', font: '700 16px system-ui', textAlign: 'center' }}>
+          <div style={{ color: 'var(--text-muted)', font: '16px system-ui', textAlign: 'center' }}>
             {statusLabel}
           </div>
         </div>
@@ -270,10 +270,10 @@ export function LoadingBoard({ state, isMobile }: Props) {
             transition: 'opacity 0.4s ease',
           }}
         >
-          <span style={{ color: 'var(--accent)', font: '11px system-ui', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+          <span style={{ color: 'var(--accent)', font: '13px system-ui', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
             Did you know?
           </span>
-          <div style={{ color: '#ccc', font: '13px/1.5 system-ui', marginTop: 4 }}>
+          <div style={{ color: '#ccc', font: '16px/1.5 system-ui', marginTop: 4 }}>
             {FACTS[factIndex]}
           </div>
         </div>
