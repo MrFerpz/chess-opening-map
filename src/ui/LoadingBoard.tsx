@@ -173,7 +173,7 @@ export function LoadingBoard({ state, isMobile }: Props) {
   let statusLabel = '';
   if (state.status === 'loading-cache') statusLabel = 'Loading cached games…';
   else if (state.status === 'fetching')
-    statusLabel = `Fetching games… ${state.fetched}${state.fromCache ? ` (+${state.fromCache} cached)` : ''}`;
+    statusLabel = `Fetching your games… ${state.fetched}${state.fromCache ? ` (+${state.fromCache} cached)` : ''}`;
   else if (state.status === 'error') statusLabel = `Error: ${state.error ?? 'unknown'}`;
 
   const boardOffset = (SUNBURST_SIZE - BOARD_SIZE) / 2;
@@ -184,6 +184,34 @@ export function LoadingBoard({ state, isMobile }: Props) {
   return (
     <div style={{ width: '100%', display: 'flex', justifyContent: 'center', overflow: 'hidden', height: scaledHeight }}>
     <div style={{ position: 'relative', width: SUNBURST_SIZE, height: SUNBURST_SIZE, flexShrink: 0, ...(isMobile ? { transform: `scale(${scale})`, transformOrigin: 'top center' } : {}) }}>
+      {/* Status label + spinner above the board (mobile only) */}
+      {isMobile && statusLabel && (
+        <div
+          style={{
+            position: 'absolute',
+            top: boardOffset - 56,
+            left: 0,
+            right: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 10,
+          }}
+        >
+          <svg
+            width="28" height="28" viewBox="0 0 28 28"
+            style={{ animation: 'cv-spin 1s linear infinite' }}
+          >
+            <circle cx="14" cy="14" r="11" fill="none" stroke="#333" strokeWidth="3" />
+            <circle cx="14" cy="14" r="11" fill="none" stroke="var(--accent)" strokeWidth="3"
+              strokeDasharray="44" strokeDashoffset="33" strokeLinecap="round" />
+          </svg>
+          <div style={{ color: 'var(--text-muted)', font: '700 16px system-ui', textAlign: 'center' }}>
+            {statusLabel}
+          </div>
+        </div>
+      )}
+
       {/* Board pinned to exact centre, matching CenterBoard position in Sunburst */}
       <div
         style={{
@@ -249,9 +277,11 @@ export function LoadingBoard({ state, isMobile }: Props) {
             {FACTS[factIndex]}
           </div>
         </div>
-        <div style={{ color: 'var(--text-muted)', font: '700 14px system-ui' }}>
-          {statusLabel}
-        </div>
+        {!isMobile && (
+          <div style={{ color: 'var(--text-muted)', font: '700 14px system-ui' }}>
+            {statusLabel}
+          </div>
+        )}
       </div>
     </div>
     </div>
