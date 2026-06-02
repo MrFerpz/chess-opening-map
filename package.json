@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "gen:gif": "node scripts/gen-loading-gif.mjs"
+    "gen:gif": "node scripts/gen-loading-gif.mjs",
+    "gen:explorer": "node scripts/gen-explorer-data.mjs"
   },
   "dependencies": {
     "chess.js": "^1.4.0",

@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import type { Color, Filter, Platform, SnapshotRequest } from './types';
-import { DEFAULT_GAME_LIMIT, DEFAULT_VIEW_DEPTH } from './types';
+import type { Color, Filter, Platform, RatingBand, SnapshotRequest, SpeedPreset, TimeClass } from './types';
+import { DEFAULT_GAME_LIMIT, DEFAULT_VIEW_DEPTH, DEFAULT_BAND, DEFAULT_EXPLORER_SPEEDS } from './types';
 import { UserForm } from './ui/UserForm';
+import { RatingBandForm } from './ui/RatingBandForm';
 import { SunburstSkeleton } from './ui/SunburstSkeleton';
 import { Filters } from './ui/Filters';
 import { ColorToggle } from './ui/ColorToggle';
@@ -10,6 +11,7 @@ import { Sunburst, type TopLine, type ColorMode } from './vis/Sunburst';
 import type { SunburstHandle } from './vis/Sunburst';
 import { GameReplay } from './vis/GameReplay';
 import { useAggregator, EMPTY_ROOT } from './hooks/useAggregator';
+import { useExplorer } from './hooks/useExplorer';
 import type { SerializedNode } from './types';
 import { useGameSync } from './hooks/useGameSync';
 import { useOpeningName } from './hooks/useOpeningName';
@@ -21,6 +23,11 @@ import { checkUserExists } from './api/platform';
 interface Session {
   platform: Platform;
   username: string;
+}
+
+interface ExplorerSession {
+  band: RatingBand;
+  speeds: TimeClass[];
 }
 
 const DEFAULT_FILTER: Filter = {
@@ -45,10 +52,17 @@ function App() {
   const isNarrow = windowWidth < 1200 && !isMobile;
   const [session, setSession] = useState<Session | null>(() => {
     const s = decodeShareUrl();
-    return s ? { platform: s.platform, username: s.username } : null;
+    return s && s.mode === 'user' ? { platform: s.platform, username: s.username } : null;
+  });
+  const [explorerSession, setExplorerSession] = useState<ExplorerSession | null>(() => {
+    const s = decodeShareUrl();
+    return s && s.mode === 'explorer' ? { band: s.band, speeds: s.speeds } : null;
   });
   const [color, setColor] = useState<Color>(() => decodeShareUrl()?.color ?? 'white');
-  const [filter, setFilter] = useState<Filter>(() => decodeShareUrl()?.filter ?? DEFAULT_FILTER);
+  const [filter, setFilter] = useState<Filter>(() => {
+    const s = decodeShareUrl();
+    return s && s.mode === 'user' ? s.filter : DEFAULT_FILTER;
+  });
   const [focusPath, setFocusPath] = useState<string[]>(() => decodeShareUrl()?.focusPath ?? []);
   const [reloadCount, setReloadCount] = useState(0);
   const [copyLabel, setCopyLabel] = useState<'Copy link' | 'Copied!'>('Copy link');
@@ -64,11 +78,21 @@ function App() {
     [focusPath],
   );
 
+  const isExplorer = explorerSession != null;
+
   const { client, snapshot, error: workerError } = useAggregator(color, filter, request);
   const { state: sync, start, stop } = useGameSync();
+  const explorer = useExplorer(
+    color,
+    explorerSession?.band ?? DEFAULT_BAND,
+    explorerSession?.speeds ?? DEFAULT_EXPLORER_SPEEDS,
+    focusPath,
+    DEFAULT_VIEW_DEPTH,
+  );
 
   useEffect(() => { setFocusPath([]); }, [color]);
   useEffect(() => { setFocusPath([]); }, [session?.platform, session?.username]);
+  useEffect(() => { setFocusPath([]); }, [explorerSession?.band.min, explorerSession?.speeds.join(',')]);
 
   useEffect(() => {
     if (!session) return;
@@ -86,14 +110,25 @@ function App() {
 
   // Keep URL hash in sync with current view state.
   useEffect(() => {
+    if (explorerSession) {
+      const url = encodeShareUrl({ mode: 'explorer', band: explorerSession.band, speeds: explorerSession.speeds, color, focusPath });
+      history.replaceState(null, '', url);
+      return;
+    }
     if (!session) { history.replaceState(null, '', window.location.pathname); return; }
-    const url = encodeShareUrl({ platform: session.platform, username: session.username, color, filter, focusPath });
+    const url = encodeShareUrl({ mode: 'user', platform: session.platform, username: session.username, color, filter, focusPath });
     history.replaceState(null, '', url);
-  }, [session, color, filter, focusPath]);
+  }, [session, explorerSession, color, filter, focusPath]);
 
   const handleCopyLink = () => {
-    if (!session) return;
-    const url = encodeShareUrl({ platform: session.platform, username: session.username, color, filter, focusPath });
+    let url: string;
+    if (explorerSession) {
+      url = encodeShareUrl({ mode: 'explorer', band: explorerSession.band, speeds: explorerSession.speeds, color, focusPath });
+    } else if (session) {
+      url = encodeShareUrl({ mode: 'user', platform: session.platform, username: session.username, color, filter, focusPath });
+    } else {
+      return;
+    }
     void navigator.clipboard.writeText(url).then(() => {
       setCopyLabel('Copied!');
       setTimeout(() => setCopyLabel('Copy link'), 2000);
@@ -114,13 +149,21 @@ function App() {
   };
 
 
-  const root = snapshot?.root ?? EMPTY_ROOT;
-  const total = snapshot?.totalGames ?? 0;
+  // Pick the active data source.
+  const activeSnapshot = isExplorer ? explorer.snapshot : snapshot;
+  const root = activeSnapshot?.root ?? EMPTY_ROOT;
+  const total = activeSnapshot?.totalGames ?? 0;
   // Use the focusPath that matches the current snapshot, not the live UI state.
   // This keeps (root, snapshotFocusPath) consistent until the next snapshot arrives,
   // eliminating the intermediate choppy state between a click and the new data.
-  const snapshotFocusPath = snapshot?.focusPath ?? focusPath;
+  const snapshotFocusPath = activeSnapshot?.focusPath ?? focusPath;
   const openingName = useOpeningName(focusPath);
+
+  // A view is "ready to render the chart" once we have data.
+  const chartReady = isExplorer
+    ? (explorer.status === 'done' || total > 1)
+    : sync.status === 'done';
+  const dataError = isExplorer ? explorer.error : workerError;
 
   useEffect(() => {
     setFullGameMoves(null);
@@ -130,6 +173,9 @@ function App() {
       if (game) { setFullGameMoves(game.moves); setFullGameId(game.id); }
     });
   }, [session, total, focusPath]);
+
+  const hasSession = session != null || explorerSession != null;
+  const clearSession = () => { setSession(null); setExplorerSession(null); };
 
   return (
     <div style={{ minHeight: '100vh', color: 'var(--text)', display: 'flex', flexDirection: 'column' }}>
@@ -141,20 +187,22 @@ function App() {
         />
       )}
       {/* ── Header — only shown once a session is active ── */}
-      {session && <header style={isMobile ? { ...headerStyle, padding: '0 12px' } : headerStyle}>
+      {hasSession && <header style={isMobile ? { ...headerStyle, padding: '0 12px' } : headerStyle}>
         <div style={{ maxWidth: 1280, margin: '0 auto', width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <img src="/logo.webp" alt="Logo" onClick={() => setSession(null)} style={{ width: 36, height: 36, objectFit: 'contain', cursor: 'pointer' }} />
-            <span onClick={() => setSession(null)} style={{ fontSize: isMobile ? 16 : 18, letterSpacing: '-0.03em', color: 'var(--text)', fontFamily: "'Plus Jakarta Sans', sans-serif", cursor: 'pointer', flexShrink: 0 }}>
+            <img src="/logo.webp" alt="Logo" onClick={clearSession} style={{ width: 36, height: 36, objectFit: 'contain', cursor: 'pointer' }} />
+            <span onClick={clearSession} style={{ fontSize: isMobile ? 16 : 18, letterSpacing: '-0.03em', color: 'var(--text)', fontFamily: "'Plus Jakarta Sans', sans-serif", cursor: 'pointer', flexShrink: 0 }}>
               <span style={{ fontWeight: 300 }}>Opening</span><span style={{ fontWeight: 800 }}>Map</span>
             </span>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button type="button" onClick={handleRefresh} style={isMobile ? { ...headerBtnStyle, padding: '6px 10px' } : headerBtnStyle} className="header-btn">
-              {isMobile ? 'Refresh' : 'Refresh games'}
-            </button>
-            <button type="button" onClick={() => setSession(null)} style={isMobile ? { ...headerBtnStyle, padding: '6px 10px' } : headerBtnStyle} className="header-btn">
-              {isMobile ? 'Change' : 'Change user'}
+            {session && (
+              <button type="button" onClick={handleRefresh} style={isMobile ? { ...headerBtnStyle, padding: '6px 10px' } : headerBtnStyle} className="header-btn">
+                {isMobile ? 'Refresh' : 'Refresh games'}
+              </button>
+            )}
+            <button type="button" onClick={clearSession} style={isMobile ? { ...headerBtnStyle, padding: '6px 10px' } : headerBtnStyle} className="header-btn">
+              {isExplorer ? (isMobile ? 'Change' : 'Change band') : (isMobile ? 'Change' : 'Change user')}
             </button>
           </div>
         </div>
@@ -162,14 +210,34 @@ function App() {
 
       {/* ── Main ── */}
       <main style={{ flex: 1, maxWidth: 1280, margin: '0 auto', width: '100%', padding: isMobile ? '0 16px 40px' : '0 24px 40px' }}>
-        {!session && <LandingView onSubmit={(p, u) => setSession({ platform: p, username: u })} isMobile={isMobile} />}
+        {!hasSession && (
+          <LandingView
+            onSubmit={(p, u) => setSession({ platform: p, username: u })}
+            onExploreBand={(band, preset) => setExplorerSession({ band, speeds: preset.speeds })}
+            isMobile={isMobile}
+          />
+        )}
 
-        {session && (
+        {hasSession && (
           <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? 16 : 32, alignItems: 'flex-start', paddingTop: 24 }}>
             {/* ── Left sidebar ── */}
             <aside style={isMobile ? { ...sidebarStyle, width: '100%', flexDirection: 'row', flexWrap: 'wrap', gap: 10, order: 2 } : sidebarStyle}>
+              {/* Explorer band identity */}
+              {explorerSession && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '4px 2px 8px', ...(isMobile ? { width: '100%' } : {}) }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-dim)' }}>
+                    Rating band
+                  </span>
+                  <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--text)', letterSpacing: '-0.01em' }}>
+                    {explorerSession.band.label}
+                  </span>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)', textTransform: 'capitalize' }}>
+                    {explorerSession.speeds.join(', ')}
+                  </span>
+                </div>
+              )}
               {/* Platform + username identity (username is editable) */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '4px 2px 8px', ...(isMobile ? { width: '100%' } : {}) }}>
+              {session && <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '4px 2px 8px', ...(isMobile ? { width: '100%' } : {}) }}>
                 <button
                   type="button"
                   title={`Switch to ${session.platform === 'lichess' ? 'Chess.com' : 'Lichess'}`}
@@ -221,7 +289,7 @@ function App() {
                   onFocus={(e) => { e.currentTarget.style.borderBottomColor = 'var(--accent)'; }}
                   onBlurCapture={(e) => { e.currentTarget.style.borderBottomColor = 'transparent'; }}
                 />
-              </div>
+              </div>}
 
               <div style={isMobile ? { ...controlCardStyle, width: '100%' } : controlCardStyle}>
                 <div style={{ marginBottom: 14 }}>
@@ -256,15 +324,17 @@ function App() {
                     })}
                   </div>
                 </div>
-                <div>
-                  <label style={controlLabelStyle}>Filters</label>
-                  <Filters value={filter} onChange={setFilter} />
-                </div>
+                {session && (
+                  <div>
+                    <label style={controlLabelStyle}>Filters</label>
+                    <Filters value={filter} onChange={setFilter} />
+                  </div>
+                )}
               </div>
 
               {/* Lichess analysis link */}
               <a
-                href={`https://lichess.org/analysis/${(snapshot?.root?.fen ?? '').replace(/ /g, '_')}`}
+                href={`https://lichess.org/analysis/${(root?.fen ?? '').replace(/ /g, '_')}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 style={lichessBtnStyle}
@@ -274,11 +344,12 @@ function App() {
               </a>
 
               {/* Export chart */}
-              {sync.status === 'done' && total > 1 && (
+              {chartReady && total > 1 && (
                 <button
                   type="button"
                   onClick={() => {
-                    const name = `${session.username}-openings${focusPath.length ? '-' + focusPath.join('-') : ''}.png`;
+                    const base = explorerSession ? `${explorerSession.band.label}-openings` : `${session?.username}-openings`;
+                    const name = `${base}${focusPath.length ? '-' + focusPath.join('-') : ''}.png`;
                     void sunburstRef.current?.exportPng(name);
                   }}
                   style={lichessBtnStyle}
@@ -298,13 +369,13 @@ function App() {
                 {copyLabel}
               </button>
 
-              {workerError && (
+              {dataError && (
                 <div style={{ color: '#f88', fontSize: 12, padding: '8px 0' }}>
-                  Worker error: {workerError}
+                  {isExplorer ? 'Explorer error: ' : 'Worker error: '}{dataError}
                 </div>
               )}
 
-              {(sync.status === 'fetching' || sync.status === 'loading-cache') && (
+              {!isExplorer && (sync.status === 'fetching' || sync.status === 'loading-cache') && (
                 <div style={statusCardStyle}>
                   <Spinner />
                   <span style={{ color: 'var(--text)', fontSize: 13, flex: 1 }}>
@@ -324,8 +395,17 @@ function App() {
                 </div>
               )}
 
+              {isExplorer && explorer.status === 'loading' && (
+                <div style={statusCardStyle}>
+                  <Spinner />
+                  <span style={{ color: 'var(--text)', fontSize: 13, flex: 1 }}>
+                    Loading positions…
+                  </span>
+                </div>
+              )}
+
               {/* Top lines — shown in sidebar when narrow (eval bar + top-lines overlays are hidden on chart) */}
-              {isNarrow && sync.status === 'done' && total > 1 && narrowTopLines.length > 0 && (
+              {isNarrow && chartReady && total > 1 && narrowTopLines.length > 0 && (
                 <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 5 }}>
                   <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-dim)', marginBottom: 2 }}>
                     Top Lines
@@ -357,7 +437,34 @@ function App() {
 
             {/* ── Right: chart or loading ── */}
             <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'flex-start', minWidth: 0, width: '100%', ...(isMobile ? { order: 1 } : {}) }}>
-              {sync.status === 'done' && total === 1 ? (
+              {chartReady && total > 1 ? (
+                <div style={{ width: '100%' }}>
+                  <Sunburst
+                    root={root}
+                    totalGames={total}
+                    color={color}
+                    colorMode={colorMode}
+                    focusPath={snapshotFocusPath}
+                    onFocusChange={setFocusPath}
+                    size={680}
+                    isMobile={isMobile}
+                    isNarrow={isNarrow}
+                    visibleRings={isMobile ? 2 : undefined}
+                    holeUnits={isMobile ? 4 : undefined}
+                    exportRef={sunburstRef}
+                    openingName={openingName?.name ?? null}
+                    onTopLinesChange={setNarrowTopLines}
+                  />
+                </div>
+              ) : isExplorer ? (
+                explorer.status === 'done' ? (
+                  <div style={{ color: 'var(--text-muted)', padding: 48, fontSize: 14 }}>
+                    No games found for this band/time-control combination.
+                  </div>
+                ) : (
+                  <SunburstSkeleton size={isMobile ? 320 : 600} />
+                )
+              ) : sync.status === 'done' && total === 1 ? (
                 <GameReplay
                   focusPath={focusPath}
                   remainingMoves={
@@ -370,27 +477,6 @@ function App() {
                   onBackToChart={() => setFocusPath([])}
                   isMobile={isMobile}
                 />
-              ) : sync.status === 'done' && total > 1 ? (
-                <>
-                  <div style={{ width: '100%' }}>
-                    <Sunburst
-                      root={root}
-                      totalGames={total}
-                      color={color}
-                      colorMode={colorMode}
-                      focusPath={snapshotFocusPath}
-                      onFocusChange={setFocusPath}
-                      size={680}
-                      isMobile={isMobile}
-                      isNarrow={isNarrow}
-                      visibleRings={isMobile ? 2 : undefined}
-                      holeUnits={isMobile ? 4 : undefined}
-                      exportRef={sunburstRef}
-                      openingName={openingName?.name ?? null}
-                      onTopLinesChange={setNarrowTopLines}
-                    />
-                  </div>
-                </>
               ) : sync.status === 'done' ? (
                 <div style={{ color: 'var(--text-muted)', padding: 48, fontSize: 14 }}>
                   No games found for this user/filter combination.
@@ -459,12 +545,14 @@ function extractRemainingMoves(node: SerializedNode): string[] {
   return moves;
 }
 
-function LandingView({ onSubmit, isMobile }: {
+function LandingView({ onSubmit, onExploreBand, isMobile }: {
   onSubmit: (p: Platform, u: string) => void;
+  onExploreBand: (band: RatingBand, preset: SpeedPreset) => void;
   isMobile: boolean;
 }) {
   const [checking, setChecking] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [landingMode, setLandingMode] = React.useState<'user' | 'explorer'>('user');
 
   const handleSubmit = async (platform: Platform, username: string) => {
     setError(null);
@@ -503,16 +591,54 @@ function LandingView({ onSubmit, isMobile }: {
       </div>
 
       {/* Foreground content */}
-      <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 32, width: '100%' }}>
+      <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24, width: '100%' }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
           <h2 style={{ margin: 0, fontSize: isMobile ? 24 : 32, fontWeight: 800, letterSpacing: '-0.04em', color: 'var(--text)', textAlign: 'center' }}>
-            Map out your <span style={{ color: 'var(--accent)' }}>openings</span>
+            {landingMode === 'user' ? (
+              <>Map out your <span style={{ color: 'var(--accent)' }}>openings</span></>
+            ) : (
+              <>Explore a <span style={{ color: 'var(--accent)' }}>rating band</span></>
+            )}
           </h2>
           <p style={{ margin: 0, fontSize: 14, color: 'var(--text-muted)', textAlign: 'center', fontWeight: 400 }}>
-            Visualise your most-played openings as white and black
+            {landingMode === 'user'
+              ? 'Visualise your most-played openings as white and black'
+              : 'Browse what players in a rating range actually play, from 100,000s of Lichess games'}
           </p>
         </div>
-        <UserForm onSubmit={handleSubmit} checking={checking} error={error} isMobile={isMobile} />
+
+        {/* Mode toggle */}
+        <div style={{ display: 'inline-flex', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)' }}>
+          {(['user', 'explorer'] as const).map((m) => {
+            const active = landingMode === m;
+            return (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setLandingMode(m)}
+                className="chip-btn"
+                style={{
+                  background: active ? 'var(--accent)' : 'transparent',
+                  color: active ? '#111' : 'var(--text-muted)',
+                  border: 'none',
+                  padding: '8px 20px',
+                  cursor: 'pointer',
+                  fontSize: 13,
+                  fontWeight: active ? 600 : 400,
+                  transition: 'background 0.15s, color 0.15s',
+                }}
+              >
+                {m === 'user' ? 'Your games' : 'Rating band'}
+              </button>
+            );
+          })}
+        </div>
+
+        {landingMode === 'user' ? (
+          <UserForm onSubmit={handleSubmit} checking={checking} error={error} isMobile={isMobile} />
+        ) : (
+          <RatingBandForm onSubmit={onExploreBand} isMobile={isMobile} />
+        )}
       </div>
     </div>
   );

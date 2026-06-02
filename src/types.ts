@@ -56,6 +56,60 @@ export interface SnapshotRequest {
   depth: number;
 }
 
+// ── Rating-band explorer (Lichess Opening Explorer) ──────────────────────────
+// A band is identified by its lower bound, which is also the Lichess `ratings`
+// bucket value. Bands are 200 wide (Lichess's native bucketing). The top band
+// (2400) is open-ended ("2400+").
+export interface RatingBand {
+  /** Lower bound / Lichess `ratings` bucket value. */
+  min: number;
+  /** Human label, e.g. "1600–1800" or "2400+". */
+  label: string;
+}
+
+// Buckets Lichess exposes: 0,1000,1200,1400,1600,1800,2000,2200,2500.
+// We surface the meaningful 200-wide bands from 1000 up; 2400 is open-ended.
+export const RATING_BANDS: RatingBand[] = [
+  { min: 1000, label: '1000–1200' },
+  { min: 1200, label: '1200–1400' },
+  { min: 1400, label: '1400–1600' },
+  { min: 1600, label: '1600–1800' },
+  { min: 1800, label: '1800–2000' },
+  { min: 2000, label: '2000–2200' },
+  { min: 2200, label: '2200–2400' },
+  { min: 2400, label: '2400+' },
+];
+
+// Speed presets the explorer offers. Each maps to a fixed TimeClass[] that has a
+// matching pre-generated data file (public/explorer/<band>-<sorted-speeds>.json),
+// so the UI can only request combinations we actually built. Picked one at a time.
+export interface SpeedPreset {
+  /** Stable id, used only in the UI. */
+  id: string;
+  label: string;
+  speeds: TimeClass[];
+}
+
+export const SPEED_PRESETS: SpeedPreset[] = [
+  { id: 'bullet', label: 'Bullet', speeds: ['bullet'] },
+  { id: 'blitz', label: 'Blitz', speeds: ['blitz'] },
+  { id: 'rapid', label: 'Rapid', speeds: ['rapid'] },
+  // Classical omitted for now — its monthly volume is very sparse and the dump
+  // scan to generate it was prohibitively slow. Re-add once its data files
+  // exist in public/explorer/ (<band>-classical.json):
+  //   npm run gen:explorer -- --month 2026-03 --bands 1000,1200,1400,1600,1800,2000,2200,2400 --speeds classical --per-band 100000 --min-count 15 --depth 14
+  // { id: 'classical', label: 'Classical', speeds: ['classical'] },
+];
+
+export const DEFAULT_BAND = RATING_BANDS[3]; // 1600–1800
+export const DEFAULT_SPEED_PRESET = SPEED_PRESETS[1]; // Blitz
+export const DEFAULT_EXPLORER_SPEEDS: TimeClass[] = DEFAULT_SPEED_PRESET.speeds;
+
+export interface ExplorerFilter {
+  band: RatingBand;
+  speeds: TimeClass[];
+}
+
 export type MsgFromMain =
   | { type: 'reset' }
   | { type: 'ingest'; games: Game[]; final?: boolean }
