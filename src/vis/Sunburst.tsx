@@ -52,6 +52,7 @@ interface Props {
   holeUnits?: number;
   openingName?: string | null;
   onTopLinesChange?: (lines: TopLine[]) => void;
+  engineEnabled?: boolean;
 }
 
 const ANIM_MS = 350;
@@ -97,6 +98,7 @@ export function Sunburst({
   holeUnits: holeUnitsProp,
   openingName,
   onTopLinesChange,
+  engineEnabled = true,
 }: Props) {
   const visibleRings = visibleRingsProp ?? VISIBLE_RINGS;
   const holeUnits = holeUnitsProp ?? HOLE_UNITS;
@@ -106,11 +108,13 @@ export function Sunburst({
     y: number;
   } | null>(null);
   const [mobileInfo, setMobileInfo] = useState<SerializedNode | null>(null);
-  const stockfish = useStockfish();
+  const stockfish = useStockfish(engineEnabled);
   const evalCache = {
     onHover: (fen: string) => { void stockfish.enqueue(fen); },
     onLeave: () => {},
-    getEval: (fen: string) => stockfish.getPositionEval(fen)?.eval,
+    // null (not undefined) when the engine is off so UI shows '-' rather than
+    // a perpetual '…' spinner.
+    getEval: (fen: string) => engineEnabled ? stockfish.getPositionEval(fen)?.eval : null,
   };
 
   // Remember the last child entered at each depth so → can re-enter it.
@@ -660,6 +664,7 @@ export function Sunburst({
 
   // Only show the best-move arrow if it's ≥50cp better than all played children.
   const focusBestMove = (() => {
+    if (!engineEnabled) return null;
     const bm = focusPositionEval?.bestMove;
     if (!bm) return null;
     // Collect evals for all first-ring children (moves played in games).
@@ -825,14 +830,14 @@ export function Sunburst({
         </div>
       )}
     </div>
-    {!isMobile && !isNarrow && <EvalBar eval_={focusEval} height={size * 0.7} />}
+    {engineEnabled && !isMobile && !isNarrow && <EvalBar eval_={focusEval} height={size * 0.7} />}
     </div>
-    {isNarrow && (
+    {engineEnabled && isNarrow && (
       <div style={{ width: '100%', maxWidth: size, margin: '10px auto 0', boxSizing: 'border-box' }}>
         <EvalBar eval_={focusEval} height={0} horizontal />
       </div>
     )}
-    {isMobile && (
+    {engineEnabled && isMobile && (
       <div style={{ width: '100%', maxWidth: size, margin: '8px auto 0', boxSizing: 'border-box', padding: '0 8px' }}>
         <EvalBar eval_={focusEval} height={0} horizontal hideLabel />
       </div>
@@ -921,7 +926,7 @@ export function Sunburst({
               <div style={{ flex: 'none' }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 4 }}>
                   <span style={{ fontWeight: 700, fontSize: 15 }}>{node.san ?? 'Start'}</span>
-                  <span style={{ color: evalColor, fontWeight: 600, fontSize: 13 }}>{evalStr}</span>
+                  {engineEnabled && <span style={{ color: evalColor, fontWeight: 600, fontSize: 13 }}>{evalStr}</span>}
                 </div>
                 <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>
                   {node.count.toLocaleString()} games ({pct}%)

@@ -84,6 +84,7 @@ function normalise(raw: ChessComGame, username: string): Game | null {
     result: mapResult(me.result),
     userRating: me.rating ?? null,
     oppRating: opp.rating ?? null,
+    oppName: opp.username ?? null,
     eco: raw.eco,
     moves,
   };

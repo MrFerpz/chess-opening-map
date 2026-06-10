@@ -9,7 +9,7 @@ import { ColorToggle } from './ui/ColorToggle';
 import { LoadingBoard } from './ui/LoadingBoard';
 import { Sunburst, type TopLine, type ColorMode } from './vis/Sunburst';
 import type { SunburstHandle } from './vis/Sunburst';
-import { GameReplay } from './vis/GameReplay';
+import { GameReplay, type GameMeta } from './vis/GameReplay';
 import { useAggregator, EMPTY_ROOT } from './hooks/useAggregator';
 import { useExplorer } from './hooks/useExplorer';
 import type { SerializedNode } from './types';
@@ -69,6 +69,17 @@ function App() {
   const [confirmRefresh, setConfirmRefresh] = useState(false);
   const [fullGameMoves, setFullGameMoves] = useState<string[] | null>(null);
   const [fullGameId, setFullGameId] = useState<string | null>(null);
+  const [fullGameMeta, setFullGameMeta] = useState<GameMeta | null>(null);
+  // Engine defaults off on touch devices — local Stockfish competes with
+  // animations for CPU there. User choice is persisted.
+  const [engineEnabled, setEngineEnabled] = useState<boolean>(() => {
+    const stored = localStorage.getItem('engine-enabled');
+    if (stored != null) return stored === 'true';
+    return !window.matchMedia?.('(pointer: coarse)').matches;
+  });
+  useEffect(() => {
+    localStorage.setItem('engine-enabled', String(engineEnabled));
+  }, [engineEnabled]);
   const [narrowTopLines, setNarrowTopLines] = useState<TopLine[]>([]);
   const [colorMode, setColorMode] = useState<ColorMode>('opening');
   const sunburstRef = useRef<SunburstHandle>(null);
@@ -168,9 +179,20 @@ function App() {
   useEffect(() => {
     setFullGameMoves(null);
     setFullGameId(null);
+    setFullGameMeta(null);
     if (!session || total !== 1) return;
     void findGameByMoves(session.platform, session.username, focusPath).then((game) => {
-      if (game) { setFullGameMoves(game.moves); setFullGameId(game.id); }
+      if (game) {
+        setFullGameMoves(game.moves);
+        setFullGameId(game.id);
+        setFullGameMeta({
+          oppName: game.oppName ?? null,
+          oppRating: game.oppRating,
+          playedAt: game.playedAt,
+          timeClass: game.timeClass,
+          result: game.result,
+        });
+      }
     });
   }, [session, total, focusPath]);
 
@@ -324,6 +346,34 @@ function App() {
                     })}
                   </div>
                 </div>
+                <div style={{ marginBottom: 14 }}>
+                  <label style={controlLabelStyle}>Engine</label>
+                  <div style={{ display: 'inline-flex', borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border)' }}>
+                    {([true, false] as const).map((on) => {
+                      const active = engineEnabled === on;
+                      return (
+                        <button
+                          key={String(on)}
+                          type="button"
+                          onClick={() => setEngineEnabled(on)}
+                          className="chip-btn"
+                          style={{
+                            background: active ? 'var(--accent)' : 'transparent',
+                            color: active ? '#111' : 'var(--text-muted)',
+                            border: 'none',
+                            padding: '6px 16px',
+                            cursor: 'pointer',
+                            fontSize: 13,
+                            fontWeight: active ? 600 : 400,
+                            transition: 'background 0.15s, color 0.15s',
+                          }}
+                        >
+                          {on ? 'On' : 'Off'}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
                 {session && (
                   <div>
                     <label style={controlLabelStyle}>Filters</label>
@@ -454,6 +504,7 @@ function App() {
                     exportRef={sunburstRef}
                     openingName={openingName?.name ?? null}
                     onTopLinesChange={setNarrowTopLines}
+                    engineEnabled={engineEnabled}
                   />
                 </div>
               ) : isExplorer ? (
@@ -474,8 +525,10 @@ function App() {
                   }
                   orientation={color}
                   gameId={fullGameId ?? undefined}
+                  gameMeta={fullGameMeta}
                   onBackToChart={() => setFocusPath([])}
                   isMobile={isMobile}
+                  engineEnabled={engineEnabled}
                 />
               ) : sync.status === 'done' ? (
                 <div style={{ color: 'var(--text-muted)', padding: 48, fontSize: 14 }}>

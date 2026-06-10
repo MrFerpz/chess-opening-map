@@ -79,6 +79,7 @@ function normalise(raw: LichessGame, username: string): Game | null {
     result,
     userRating: me.rating ?? null,
     oppRating: opp.rating ?? null,
+    oppName: opp.user?.name ?? null,
     moves,
   };
 }

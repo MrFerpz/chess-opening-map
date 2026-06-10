@@ -13,6 +13,8 @@ export interface Game {
   result: Result;
   userRating: number | null;
   oppRating: number | null;
+  // Optional: games cached before this field existed won't have it.
+  oppName?: string | null;
   eco?: string;
   moves: string[];
 }

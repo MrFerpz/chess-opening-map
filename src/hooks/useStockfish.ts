@@ -37,7 +37,9 @@ const BACKGROUND_PAUSE_MS = 800;
 // the hold forward, so the engine only starts once the user settles.
 const SEARCH_START_DELAY_MS = IS_COARSE_POINTER ? 300 : 0;
 
-export function useStockfish() {
+// When `enabled` is false the worker is never spawned (or is torn down) and
+// enqueue/evaluateAll become no-ops; cached evals remain readable.
+export function useStockfish(enabled = true) {
   const workerRef = useRef<Worker | null>(null);
   const [status, setStatus] = useState<Status>('idle');
   const [evals, setEvals] = useState<Map<string, PositionEval>>(new Map());
@@ -152,6 +154,7 @@ export function useStockfish() {
   }, [processNext]);
 
   useEffect(() => {
+    if (!enabled) return;
     const worker = new Worker('/stockfish-18-lite-single.js');
     workerRef.current = worker;
 
@@ -173,18 +176,21 @@ export function useStockfish() {
       readyRef.current = false;
       runningRef.current = false;
       runningFenRef.current = null;
+      queueRef.current = [];
+      setStatus('idle');
       if (pauseTimerRef.current != null) {
         window.clearTimeout(pauseTimerRef.current);
         pauseTimerRef.current = null;
       }
     };
-  }, [processNext]);
+  }, [processNext, enabled]);
 
   // Enqueue a single FEN with priority — returns a promise that resolves when done.
   // Interrupts any in-flight search for a different position and briefly pauses
   // background analysis so navigation stays responsive.
   const enqueue = useCallback((fen: string): Promise<void> => {
     return new Promise((resolve) => {
+      if (!enabled) { resolve(); return; }
       if (cache.has(fen)) {
         // Cache hit — no need to interrupt or pause the background analysis.
         store(fen, cache.get(fen)!);
@@ -199,17 +205,18 @@ export function useStockfish() {
       }
       processNext();
     });
-  }, [processNext, store]);
+  }, [processNext, store, enabled]);
 
   // Evaluate all positions in order (for background analysis).
   const evaluateAll = useCallback((fens: string[]) => {
+    if (!enabled) return;
     for (const fen of fens) {
       if (!cache.has(fen)) {
         queueRef.current.push({ fen, resolve: () => {}, background: true });
       }
     }
     processNext();
-  }, [processNext]);
+  }, [processNext, enabled]);
 
   const getPositionEval = useCallback((fen: string): PositionEval | undefined => {
     if (evals.has(fen)) return evals.get(fen);

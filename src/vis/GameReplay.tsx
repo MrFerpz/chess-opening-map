@@ -2,17 +2,27 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Chess } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
 import { STARTING_FEN } from '../types';
-import type { Color } from '../types';
+import type { Color, Result, TimeClass } from '../types';
 import { EvalBar } from './EvalBar';
 import { useStockfish } from '../hooks/useStockfish';
+
+export interface GameMeta {
+  oppName: string | null;
+  oppRating: number | null;
+  playedAt: number;
+  timeClass: TimeClass;
+  result: Result;
+}
 
 interface Props {
   focusPath: string[];
   remainingMoves: string[];
   orientation: Color;
   gameId?: string;
+  gameMeta?: GameMeta | null;
   onBackToChart: () => void;
   isMobile?: boolean;
+  engineEnabled?: boolean;
 }
 
 function gameUrl(gameId: string): string {
@@ -57,7 +67,7 @@ const ReplayBoard = React.memo(function ReplayBoard({ fen, orientation, bestMove
   );
 });
 
-export function GameReplay({ focusPath, remainingMoves, orientation, gameId, onBackToChart, isMobile }: Props) {
+export function GameReplay({ focusPath, remainingMoves, orientation, gameId, gameMeta, onBackToChart, isMobile, engineEnabled = true }: Props) {
   const boardSize = isMobile ? Math.min(window.innerWidth - 32, 360) : 400;
   const [cursor, setCursor] = useState(0);
   const [boardOrientation, setBoardOrientation] = useState<Color>(orientation);
@@ -79,7 +89,7 @@ export function GameReplay({ focusPath, remainingMoves, orientation, gameId, onB
   const fen = positions[cursor] ?? STARTING_FEN;
   const totalSteps = positions.length - 1;
 
-  const { enqueue, evaluateAll, getPositionEval, status } = useStockfish();
+  const { enqueue, evaluateAll, getPositionEval, status } = useStockfish(engineEnabled);
 
   // Kick off background analysis of all positions as soon as we enter.
   useEffect(() => {
@@ -157,26 +167,58 @@ export function GameReplay({ focusPath, remainingMoves, orientation, gameId, onB
     } catch { return null; }
   }, [fen, posEval]);
 
+  const resultLabel = gameMeta ? ({ win: 'Won', loss: 'Lost', draw: 'Drew' } as const)[gameMeta.result] : null;
+  const resultColor = gameMeta ? ({ win: 'var(--win)', loss: 'var(--loss)', draw: 'var(--text-muted)' } as const)[gameMeta.result] : null;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: '24px 0', width: '100%' }}>
-      {/* Board + eval bar */}
+      {/* Game title */}
+      {gameMeta && (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, textAlign: 'center' }}>
+          <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text)' }}>
+            vs {gameMeta.oppName ?? (gameMeta.oppRating != null ? `${gameMeta.oppRating} rated` : 'unknown opponent')}
+          </span>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+            {gameMeta.oppName && gameMeta.oppRating != null && <>{gameMeta.oppRating} rating · </>}
+            <span style={{ textTransform: 'capitalize' }}>{gameMeta.timeClass}</span>
+            {' · '}
+            <span style={{ color: resultColor ?? undefined, fontWeight: 600 }}>{resultLabel}</span>
+            {' · '}
+            {new Date(gameMeta.playedAt).toLocaleDateString('en-GB')}
+          </span>
+        </div>
+      )}
+
+      {/* Board + eval bar — tap/click the board to play the next move */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-        <ReplayBoard fen={fen} orientation={boardOrientation} bestMove={bestMove} size={boardSize} />
-        <EvalBar eval_={currentEval} height={boardSize} loading={isLoading && currentEval === undefined} />
+        <div
+          onClick={() => setCursor(c => Math.min(totalSteps, c + 1))}
+          style={{ cursor: 'pointer' }}
+          title="Play next move"
+        >
+          <ReplayBoard fen={fen} orientation={boardOrientation} bestMove={engineEnabled ? bestMove : null} size={boardSize} />
+        </div>
+        {engineEnabled && (
+          <EvalBar eval_={currentEval} height={boardSize} loading={isLoading && currentEval === undefined} />
+        )}
       </div>
 
       {/* Engine line */}
-      <div style={{ height: 18, fontSize: 12, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
-        {isLoading && currentEval === undefined
-          ? <span style={{ color: 'var(--text-dim)' }}>analysing…</span>
-          : engineLine
-          ? <span><span style={{ color: 'var(--accent)', marginRight: 6 }}>Best:</span>{engineLine}</span>
-          : null
-        }
-      </div>
+      {engineEnabled && (
+        <div style={{ height: 18, fontSize: 12, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+          {isLoading && currentEval === undefined
+            ? <span style={{ color: 'var(--text-dim)' }}>analysing…</span>
+            : engineLine
+            ? <span><span style={{ color: 'var(--accent)', marginRight: 6 }}>Best:</span>{engineLine}</span>
+            : null
+          }
+        </div>
+      )}
 
       {/* Eval graph */}
-      <EvalGraph evals={graphEvals} cursor={cursor} onSeek={setCursor} width={boardSize} />
+      {engineEnabled && (
+        <EvalGraph evals={graphEvals} cursor={cursor} onSeek={setCursor} width={boardSize} />
+      )}
 
       {/* Nav controls */}
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
