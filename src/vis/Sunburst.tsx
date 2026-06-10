@@ -57,6 +57,15 @@ interface Props {
 const ANIM_MS = 350;
 const MOBILE_ZOOM_DELAY_MS = 140;
 
+// Canvas backing resolution. Phones often report DPR 2.6–3, which makes every
+// repaint push 2–3× the pixels of DPR 2 for no visible gain at this size —
+// cap it on touch devices so repaints don't compete with piece animations.
+const CANVAS_DPR = typeof window === 'undefined'
+  ? 1
+  : window.matchMedia?.('(pointer: coarse)').matches
+    ? Math.min(window.devicePixelRatio || 1, 2)
+    : window.devicePixelRatio || 1;
+
 const touchSurfaceStyle: React.CSSProperties = {
   WebkitTapHighlightColor: 'transparent',
   WebkitTouchCallout: 'none',
@@ -162,7 +171,7 @@ export function Sunburst({
       const sunburstCanvas = canvasRef.current;
       if (!sunburstCanvas) return;
 
-      const dpr = window.devicePixelRatio || 1;
+      const dpr = CANVAS_DPR;
 
       const canvas = document.createElement('canvas');
       canvas.width = size * dpr;
@@ -206,7 +215,7 @@ export function Sunburst({
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = CANVAS_DPR;
     const cx = (size / 2) * dpr;
     const cy = (size / 2) * dpr;
     const rr = ringRadius * dpr;
@@ -628,9 +637,8 @@ export function Sunburst({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = size * dpr;
-    canvas.height = size * dpr;
+    canvas.width = size * CANVAS_DPR;
+    canvas.height = size * CANVAS_DPR;
     paintCanvas(renderedRectsRef.current);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [size]);
@@ -682,8 +690,8 @@ export function Sunburst({
       {/* Canvas: draws all arcs + labels */}
       <canvas
         ref={canvasRef}
-        width={size * (typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1)}
-        height={size * (typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1)}
+        width={size * CANVAS_DPR}
+        height={size * CANVAS_DPR}
         style={{ ...touchSurfaceStyle, display: 'block', width: '100%', height: 'auto', position: 'absolute', inset: 0, borderRadius: '50%', cursor: 'pointer' }}
         onPointerDown={handlePointerDown}
         onPointerUp={handlePointerUp}

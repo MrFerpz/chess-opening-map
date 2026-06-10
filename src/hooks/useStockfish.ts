@@ -31,6 +31,12 @@ const GO_COMMAND = IS_COARSE_POINTER ? 'go depth 12 movetime 400' : 'go depth 15
 // (i.e. while the user is actively navigating and pieces are animating).
 const BACKGROUND_PAUSE_MS = 800;
 
+// On touch devices, hold off starting ANY new search briefly after an enqueue:
+// a tap kicks off the piece animation at the same moment, and the engine
+// saturating a core right then drops animation frames. Rapid taps keep pushing
+// the hold forward, so the engine only starts once the user settles.
+const SEARCH_START_DELAY_MS = IS_COARSE_POINTER ? 300 : 0;
+
 export function useStockfish() {
   const workerRef = useRef<Worker | null>(null);
   const [status, setStatus] = useState<Status>('idle');
@@ -43,6 +49,7 @@ export function useStockfish() {
   const runningRef = useRef(false);
   const runningFenRef = useRef<string | null>(null);
   const pauseUntilRef = useRef(0);
+  const holdUntilRef = useRef(0);
   const pauseTimerRef = useRef<number | null>(null);
   // Latest processNext, for the pause timer to call without a circular reference.
   const processNextRef = useRef<(() => void) | null>(null);
@@ -60,14 +67,20 @@ export function useStockfish() {
     const head = queueRef.current[0];
     if (!head) return;
 
-    // Hold background work while the user is navigating so the CPU is free
-    // for piece animations; retry once the pause window has passed.
-    if (head.background && Date.now() < pauseUntilRef.current) {
+    // Hold work while the user is navigating so the CPU is free for piece
+    // animations; retry once the relevant window has passed. Priority items
+    // honour the (touch-only) start delay; background items also honour the
+    // longer post-navigation pause.
+    const deferUntil = Math.max(
+      holdUntilRef.current,
+      head.background ? pauseUntilRef.current : 0,
+    );
+    if (Date.now() < deferUntil) {
       if (pauseTimerRef.current == null) {
         pauseTimerRef.current = window.setTimeout(() => {
           pauseTimerRef.current = null;
           processNextRef.current?.();
-        }, Math.max(50, pauseUntilRef.current - Date.now()));
+        }, Math.max(50, deferUntil - Date.now()));
       }
       return;
     }
@@ -180,6 +193,7 @@ export function useStockfish() {
       }
       queueRef.current.unshift({ fen, resolve });
       pauseUntilRef.current = Date.now() + BACKGROUND_PAUSE_MS;
+      holdUntilRef.current = Date.now() + SEARCH_START_DELAY_MS;
       if (runningRef.current && runningFenRef.current !== fen) {
         workerRef.current?.postMessage('stop');
       }
