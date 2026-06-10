@@ -241,6 +241,43 @@ export function LoadingBoard({ state, isMobile, onStop }: Props) {
         </div>
       )}
 
+      {/* Status label + spinner above the board (desktop only) */}
+      {!isMobile && statusLabel && (
+        <div
+          style={{
+            position: 'absolute',
+            top: boardOffset - 110,
+            left: 0,
+            right: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 10,
+          }}
+        >
+          <svg
+            width="28" height="28" viewBox="0 0 28 28"
+            style={{ animation: isWorking ? 'cv-spin 1s linear infinite' : 'none' }}
+          >
+            <circle cx="14" cy="14" r="11" fill="none" stroke="#333" strokeWidth="3" />
+            <circle cx="14" cy="14" r="11" fill="none" stroke="var(--accent)" strokeWidth="3"
+              strokeDasharray="44" strokeDashoffset="33" strokeLinecap="round" />
+          </svg>
+          <div style={{ color: 'var(--text-muted)', font: '700 14px system-ui', textAlign: 'center' }}>
+            {statusLabel}
+          </div>
+          {showStop && (
+            <button
+              type="button"
+              onClick={onStop}
+              style={stopBtnStyle}
+            >
+              Stop &amp; visualise
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Board pinned to exact centre, matching CenterBoard position in Sunburst */}
       <div
         style={{
@@ -306,22 +343,6 @@ export function LoadingBoard({ state, isMobile, onStop }: Props) {
             {FACTS[factIndex]}
           </div>
         </div>
-        {!isMobile && (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-            <div style={{ color: 'var(--text-muted)', font: '700 14px system-ui' }}>
-              {statusLabel}
-            </div>
-            {showStop && (
-              <button
-                type="button"
-                onClick={onStop}
-                style={stopBtnStyle}
-              >
-                Stop &amp; visualise
-              </button>
-            )}
-          </div>
-        )}
       </div>
     </div>
     </div>
