@@ -10,6 +10,7 @@ export interface SyncRunState {
   status: SyncStatus;
   fromCache: number;
   fetched: number;
+  limit: number | null;
   error: string | null;
 }
 
@@ -31,6 +32,7 @@ export function useGameSync() {
     status: 'idle',
     fromCache: 0,
     fetched: 0,
+    limit: null,
     error: null,
   });
 
@@ -52,7 +54,7 @@ export function useGameSync() {
   const start = useCallback(async ({ client, platform, username, color, filter, request, limit }: StartArgs) => {
     stopRef.current = false;
     pendingSnapshotRef.current = { client, color, filter, request };
-    setState({ status: 'loading-cache', fromCache: 0, fetched: 0, error: null });
+    setState({ status: 'loading-cache', fromCache: 0, fetched: 0, limit, error: null });
     try {
       client.reset();
       const cached = await listGames(platform, username);

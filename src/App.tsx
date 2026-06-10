@@ -482,7 +482,7 @@ function App() {
                   No games found for this user/filter combination.
                 </div>
               ) : (
-                <LoadingBoard state={sync} isMobile={isMobile} />
+                <LoadingBoard state={sync} isMobile={isMobile} onStop={stop} />
               )}
             </div>
           </div>

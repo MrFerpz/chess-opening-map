@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Chess } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
 import type { SyncRunState } from '../hooks/useGameSync';
@@ -96,6 +96,19 @@ const FACTS = [
   'Chess has been played in space,cosmonauts played against ground controllers in 1970.',
 ];
 
+const stopBtnStyle: React.CSSProperties = {
+  background: 'transparent',
+  border: '1px solid var(--border)',
+  borderRadius: 6,
+  color: 'var(--text-muted)',
+  fontSize: 13,
+  fontWeight: 500,
+  padding: '6px 16px',
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+  transition: 'border-color 0.15s, color 0.15s',
+};
+
 // Board size and container height are matched to the sunburst view so the board
 // sits in the same screen position before and after loading completes.
 // Must mirror the holeUnits/visibleRings passed to <Sunburst> in App.tsx.
@@ -110,9 +123,10 @@ function boardSizeFor(holeUnits: number, visibleRings: number) {
 interface Props {
   state: SyncRunState;
   isMobile?: boolean;
+  onStop?: () => void;
 }
 
-export function LoadingBoard({ state, isMobile }: Props) {
+export function LoadingBoard({ state, isMobile, onStop }: Props) {
   const holeUnits = isMobile ? 7 : 5;
   const visibleRings = isMobile ? 3 : 6;
   const BOARD_SIZE = boardSizeFor(holeUnits, visibleRings);
@@ -172,9 +186,15 @@ export function LoadingBoard({ state, isMobile }: Props) {
 
   let statusLabel = '';
   if (state.status === 'loading-cache') statusLabel = 'Loading cached games…';
-  else if (state.status === 'fetching')
-    statusLabel = `Fetching your games… ${state.fetched}${state.fromCache ? ` (+${state.fromCache} cached)` : ''}`;
-  else if (state.status === 'error') statusLabel = `Error: ${state.error ?? 'unknown'}`;
+  else if (state.status === 'fetching') {
+    const progress = state.limit != null
+      ? `${state.fetched} / ${state.limit}`
+      : `${state.fetched}`;
+    const cached = state.fromCache ? ` · ${state.fromCache} cached` : '';
+    statusLabel = `Fetching… ${progress} games${cached}`;
+  } else if (state.status === 'error') statusLabel = `Error: ${state.error ?? 'unknown'}`;
+
+  const showStop = state.status === 'fetching' && state.fetched > 0 && onStop;
 
   const boardOffset = (SUNBURST_SIZE - BOARD_SIZE) / 2;
 
@@ -189,7 +209,7 @@ export function LoadingBoard({ state, isMobile }: Props) {
         <div
           style={{
             position: 'absolute',
-            top: boardOffset - 90,
+            top: boardOffset - 110,
             left: 0,
             right: 0,
             display: 'flex',
@@ -209,6 +229,15 @@ export function LoadingBoard({ state, isMobile }: Props) {
           <div style={{ color: 'var(--text-muted)', font: '16px system-ui', textAlign: 'center' }}>
             {statusLabel}
           </div>
+          {showStop && (
+            <button
+              type="button"
+              onClick={onStop}
+              style={stopBtnStyle}
+            >
+              Stop &amp; visualise
+            </button>
+          )}
         </div>
       )}
 
@@ -278,8 +307,19 @@ export function LoadingBoard({ state, isMobile }: Props) {
           </div>
         </div>
         {!isMobile && (
-          <div style={{ color: 'var(--text-muted)', font: '700 14px system-ui' }}>
-            {statusLabel}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+            <div style={{ color: 'var(--text-muted)', font: '700 14px system-ui' }}>
+              {statusLabel}
+            </div>
+            {showStop && (
+              <button
+                type="button"
+                onClick={onStop}
+                style={stopBtnStyle}
+              >
+                Stop &amp; visualise
+              </button>
+            )}
           </div>
         )}
       </div>
