@@ -20,7 +20,8 @@
       "Bash(curl -s \"https://raw.githubusercontent.com/lichess-org/chess-openings/master/a.tsv\")",
       "Bash(node *)",
       "Bash(node scripts/gen-explorer-data.mjs --month 2026-03 --bands 1000,1200,1400,1600,1800,2000,2200,2400 --speeds rapid --per-band 100000 --min-count 15 --depth 14)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(npx eslint *)"
     ]
   }
 }

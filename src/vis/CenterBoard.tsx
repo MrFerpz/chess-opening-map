@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Chessboard } from 'react-chessboard';
 import type { Color } from '../types';
 import { MoveArrow, BestMoveArrow } from './MoveArrow';
@@ -12,7 +13,9 @@ interface Props {
   bestMoveUci?: string | null;  // UCI best move for the focus position e.g. "e2e4"
 }
 
-export function CenterBoard({ fen, size, containerSize, orientation, hoverSan, hoverFromFen, bestMoveUci }: Props) {
+// Memoized so Sunburst re-renders (eval updates, hover state) don't re-render
+// the board mid-animation; all props are primitives.
+export const CenterBoard = memo(function CenterBoard({ fen, size, containerSize, orientation, hoverSan, hoverFromFen, bestMoveUci }: Props) {
   const pct = ((size / containerSize) * 100).toFixed(4) + '%';
   return (
     <div
@@ -57,4 +60,4 @@ export function CenterBoard({ fen, size, containerSize, orientation, hoverSan, h
       )}
     </div>
   );
-}
+});

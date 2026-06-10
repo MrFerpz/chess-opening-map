@@ -20,15 +20,32 @@ const cache = new Map<string, PositionEval>();
 
 type Status = 'idle' | 'ready' | 'thinking';
 
+// On touch devices the single-threaded WASM engine competes with the UI for
+// CPU cores, so cap each search by time as well as depth. Both limits apply;
+// the search stops at whichever is hit first.
+const IS_COARSE_POINTER =
+  typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
+const GO_COMMAND = IS_COARSE_POINTER ? 'go depth 12 movetime 400' : 'go depth 15 movetime 2000';
+
+// How long background analysis stays paused after a priority eval is requested
+// (i.e. while the user is actively navigating and pieces are animating).
+const BACKGROUND_PAUSE_MS = 800;
+
 export function useStockfish() {
   const workerRef = useRef<Worker | null>(null);
   const [status, setStatus] = useState<Status>('idle');
   const [evals, setEvals] = useState<Map<string, PositionEval>>(new Map());
   const readyRef = useRef(false);
 
-  // Queue of pending evaluations — processed one at a time.
-  const queueRef = useRef<Array<{ fen: string; resolve: () => void }>>([]);
+  // Queue of pending evaluations — processed one at a time. Priority items
+  // (from enqueue) sit at the front; background items (from evaluateAll) at the back.
+  const queueRef = useRef<Array<{ fen: string; resolve: () => void; background?: boolean }>>([]);
   const runningRef = useRef(false);
+  const runningFenRef = useRef<string | null>(null);
+  const pauseUntilRef = useRef(0);
+  const pauseTimerRef = useRef<number | null>(null);
+  // Latest processNext, for the pause timer to call without a circular reference.
+  const processNextRef = useRef<(() => void) | null>(null);
 
   // Latest depth-N info for the current evaluation.
   const latestInfoRef = useRef<{ eval: EvalResult | null; bestMove: string | null }>({ eval: null, bestMove: null });
@@ -40,22 +57,37 @@ export function useStockfish() {
 
   const processNext = useCallback(() => {
     if (!workerRef.current || !readyRef.current || runningRef.current) return;
-    const next = queueRef.current.shift();
-    if (!next) return;
+    const head = queueRef.current[0];
+    if (!head) return;
+
+    // Hold background work while the user is navigating so the CPU is free
+    // for piece animations; retry once the pause window has passed.
+    if (head.background && Date.now() < pauseUntilRef.current) {
+      if (pauseTimerRef.current == null) {
+        pauseTimerRef.current = window.setTimeout(() => {
+          pauseTimerRef.current = null;
+          processNextRef.current?.();
+        }, Math.max(50, pauseUntilRef.current - Date.now()));
+      }
+      return;
+    }
+
+    const next = queueRef.current.shift()!;
 
     if (cache.has(next.fen)) {
       // Already cached — seed local state and move on.
       store(next.fen, cache.get(next.fen)!);
       next.resolve();
-      processNext();
+      processNextRef.current?.();
       return;
     }
 
     runningRef.current = true;
+    runningFenRef.current = next.fen;
     latestInfoRef.current = { eval: null, bestMove: null };
     setStatus('thinking');
     workerRef.current.postMessage(`position fen ${next.fen}`);
-    workerRef.current.postMessage('go depth 15');
+    workerRef.current.postMessage(GO_COMMAND);
 
     const fen = next.fen;
     const resolve = next.resolve;
@@ -85,16 +117,26 @@ export function useStockfish() {
           eval: latestInfoRef.current.eval,
           bestMove: latestInfoRef.current.bestMove ?? bestMove,
         };
-        store(fen, result);
+        if (result.eval) {
+          store(fen, result);
+        } else {
+          // Search was interrupted before producing a score — retry later.
+          queueRef.current.push({ fen, resolve: () => {}, background: true });
+        }
         resolve();
         runningRef.current = false;
+        runningFenRef.current = null;
         setStatus('ready');
-        processNext();
+        processNextRef.current?.();
       }
     };
 
     workerRef.current.addEventListener('message', handler);
   }, [store]);
+
+  useEffect(() => {
+    processNextRef.current = processNext;
+  }, [processNext]);
 
   useEffect(() => {
     const worker = new Worker('/stockfish-18-lite-single.js');
@@ -117,22 +159,39 @@ export function useStockfish() {
       workerRef.current = null;
       readyRef.current = false;
       runningRef.current = false;
+      runningFenRef.current = null;
+      if (pauseTimerRef.current != null) {
+        window.clearTimeout(pauseTimerRef.current);
+        pauseTimerRef.current = null;
+      }
     };
   }, [processNext]);
 
-  // Enqueue a single FEN — returns a promise that resolves when done.
+  // Enqueue a single FEN with priority — returns a promise that resolves when done.
+  // Interrupts any in-flight search for a different position and briefly pauses
+  // background analysis so navigation stays responsive.
   const enqueue = useCallback((fen: string): Promise<void> => {
     return new Promise((resolve) => {
-      queueRef.current.push({ fen, resolve });
+      if (cache.has(fen)) {
+        // Cache hit — no need to interrupt or pause the background analysis.
+        store(fen, cache.get(fen)!);
+        resolve();
+        return;
+      }
+      queueRef.current.unshift({ fen, resolve });
+      pauseUntilRef.current = Date.now() + BACKGROUND_PAUSE_MS;
+      if (runningRef.current && runningFenRef.current !== fen) {
+        workerRef.current?.postMessage('stop');
+      }
       processNext();
     });
-  }, [processNext]);
+  }, [processNext, store]);
 
   // Evaluate all positions in order (for background analysis).
   const evaluateAll = useCallback((fens: string[]) => {
     for (const fen of fens) {
       if (!cache.has(fen)) {
-        queueRef.current.push({ fen, resolve: () => {} });
+        queueRef.current.push({ fen, resolve: () => {}, background: true });
       }
     }
     processNext();

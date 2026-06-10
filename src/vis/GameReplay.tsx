@@ -32,6 +32,31 @@ function uciToArrow(uci: string | null, color = '#3ddc97'): Arrow[] {
   return [{ startSquare: uci.slice(0, 2), endSquare: uci.slice(2, 4), color }];
 }
 
+// Memoized so eval-cache updates streaming in from the engine don't re-render
+// the board (and stutter its piece animation); all props are primitives.
+const ReplayBoard = React.memo(function ReplayBoard({ fen, orientation, bestMove, size }: {
+  fen: string;
+  orientation: Color;
+  bestMove: string | null;
+  size: number;
+}) {
+  return (
+    <div style={{ width: size, height: size, borderRadius: 6, overflow: 'hidden', boxShadow: '0 4px 32px rgba(0,0,0,0.5)', flexShrink: 0 }}>
+      <Chessboard
+        options={{
+          position: fen,
+          allowDragging: false,
+          showNotation: true,
+          boardOrientation: orientation,
+          animationDurationInMs: 150,
+          id: 'replay-board',
+          arrows: uciToArrow(bestMove, '#3ddc97'),
+        }}
+      />
+    </div>
+  );
+});
+
 export function GameReplay({ focusPath, remainingMoves, orientation, gameId, onBackToChart, isMobile }: Props) {
   const boardSize = isMobile ? Math.min(window.innerWidth - 32, 360) : 400;
   const [cursor, setCursor] = useState(0);
@@ -136,19 +161,7 @@ export function GameReplay({ focusPath, remainingMoves, orientation, gameId, onB
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: '24px 0', width: '100%' }}>
       {/* Board + eval bar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-        <div style={{ width: boardSize, height: boardSize, borderRadius: 6, overflow: 'hidden', boxShadow: '0 4px 32px rgba(0,0,0,0.5)', flexShrink: 0 }}>
-          <Chessboard
-            options={{
-              position: fen,
-              allowDragging: false,
-              showNotation: true,
-              boardOrientation: boardOrientation,
-              animationDurationInMs: 150,
-              id: 'replay-board',
-              arrows: uciToArrow(bestMove, '#3ddc97'),
-            }}
-          />
-        </div>
+        <ReplayBoard fen={fen} orientation={boardOrientation} bestMove={bestMove} size={boardSize} />
         <EvalBar eval_={currentEval} height={boardSize} loading={isLoading && currentEval === undefined} />
       </div>
 
