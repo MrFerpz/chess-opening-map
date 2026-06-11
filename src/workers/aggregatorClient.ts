@@ -28,6 +28,12 @@ export class AggregatorClient {
   private errorListeners = new Set<ErrorListener>();
   // Keyed by `${color}|${focusPath.join('>')}` — stores prefetched snapshots.
   private prefetchCache = new Map<string, SnapshotData>();
+  // Bumped on every reset/ingest. A prefetch result computed against an older
+  // game set must not be cached once newer games have arrived.
+  private ingestGeneration = 0;
+  // FIFO of the generation each in-flight prefetch was sent at. The worker
+  // processes messages in order, so its prefetch replies come back in order too.
+  private prefetchSendGenerations: number[] = [];
 
   constructor() {
     this.worker = new AggregatorWorker();
@@ -42,8 +48,13 @@ export class AggregatorClient {
           depth: msg.depth,
         };
         if (msg.prefetch) {
-          const key = `${msg.color}|${msg.focusPath.join('>')}`;
-          this.prefetchCache.set(key, snap);
+          // Match this reply to the generation its request was sent at. Discard
+          // if a reset/ingest has happened since — the counts would be stale.
+          const sentGen = this.prefetchSendGenerations.shift();
+          if (sentGen === this.ingestGeneration) {
+            const key = `${msg.color}|${msg.focusPath.join('>')}`;
+            this.prefetchCache.set(key, snap);
+          }
         } else {
           for (const l of this.snapshotListeners) l(snap);
         }
@@ -60,11 +71,19 @@ export class AggregatorClient {
   }
 
   reset() {
+    this.ingestGeneration++;
     this.prefetchCache.clear();
     this.send({ type: 'reset' });
   }
 
   ingest(games: Game[], final = false) {
+    // Any cached prefetch was computed against the game set loaded *before*
+    // these games. Once new games arrive those child counts are stale (e.g. a
+    // line prefetched at 23 games when only a slice had streamed in, while the
+    // full set has 993), so drop them — the next live snapshot re-prefetches.
+    // The generation bump also invalidates any prefetch replies still in flight.
+    this.ingestGeneration++;
+    this.prefetchCache.clear();
     this.send({ type: 'ingest', games, final });
   }
 
@@ -87,6 +106,7 @@ export class AggregatorClient {
   prefetchSnapshot(color: Color, filter: Filter, request: SnapshotRequest) {
     const key = `${color}|${request.focusPath.join('>')}`;
     if (this.prefetchCache.has(key)) return; // already cached
+    this.prefetchSendGenerations.push(this.ingestGeneration);
     this.send({ type: 'prefetch', color, filter, request });
   }
 
