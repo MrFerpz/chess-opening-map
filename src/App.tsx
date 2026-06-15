@@ -18,6 +18,9 @@ import { useOpeningName } from './hooks/useOpeningName';
 import { clearUser, findGameByMoves } from './store/cache';
 import { encodeShareUrl, decodeShareUrl } from './lib/shareUrl';
 import { ConfirmModal } from './ui/ConfirmModal';
+import { CoachMark } from './ui/CoachMark';
+import { useOnboarding } from './hooks/useOnboarding';
+import { isSoundEnabled, setSoundEnabled } from './lib/sounds';
 import { checkUserExists } from './api/platform';
 
 interface Session {
@@ -82,7 +85,17 @@ function App() {
   }, [engineEnabled]);
   const [narrowTopLines, setNarrowTopLines] = useState<TopLine[]>([]);
   const [colorMode, setColorMode] = useState<ColorMode>('opening');
+  // Sound on/off — the canonical value + persistence live in lib/sounds.ts; this
+  // mirror exists only to drive a re-render of the toggle.
+  const [soundOn, setSoundOn] = useState<boolean>(() => isSoundEnabled());
   const sunburstRef = useRef<SunburstHandle>(null);
+
+  // ── Onboarding ──
+  const onboarding = useOnboarding();
+  const chartContainerRef = useRef<HTMLDivElement>(null);
+  const playingAsRef = useRef<HTMLDivElement>(null);
+  const colourByRef = useRef<HTMLDivElement>(null);
+  const [coachStep, setCoachStep] = useState(0);
 
   const request: SnapshotRequest = useMemo(
     () => ({ focusPath, depth: DEFAULT_VIEW_DEPTH }),
@@ -199,8 +212,41 @@ function App() {
   const hasSession = session != null || explorerSession != null;
   const clearSession = () => { setSession(null); setExplorerSession(null); };
 
+  // Coach-mark sequence. Marks with a missing target (e.g. single-game replay
+  // view has no sunburst) are filtered out so we never point at nothing. Targets
+  // are resolved from refs in an effect (after the chart has mounted), not during
+  // render, then held in state for the CoachMark popover to anchor to.
+  const chartLoaded = hasSession && chartReady && total > 1;
+  const showCoach = onboarding.showCoachMarks && chartLoaded;
+  const [coachSteps, setCoachSteps] = useState<{ target: HTMLDivElement; text: string }[]>([]);
+  useEffect(() => {
+    if (!showCoach) { setCoachSteps([]); return; }
+    const candidates = [
+      { target: chartContainerRef.current, text: 'Click any ring to zoom into that line. Click the centre to step back out.' },
+      { target: playingAsRef.current, text: 'Switch between your games as White and Black.' },
+      { target: colourByRef.current, text: 'Switch to Win rate to colour each move green (winning) or red (losing).' },
+    ];
+    setCoachSteps(candidates.filter((s): s is { target: HTMLDivElement; text: string } => s.target != null));
+  }, [showCoach]);
+  const activeCoach = coachSteps[coachStep];
+  const advanceCoach = () => {
+    if (coachStep + 1 >= coachSteps.length) { onboarding.finish(); setCoachStep(0); }
+    else setCoachStep(coachStep + 1);
+  };
+  const skipCoach = () => { onboarding.finish(); setCoachStep(0); };
+
   return (
     <div style={{ minHeight: '100vh', color: 'var(--text)', display: 'flex', flexDirection: 'column' }}>
+      {activeCoach && (
+        <CoachMark
+          target={activeCoach.target}
+          text={activeCoach.text}
+          step={coachStep}
+          total={coachSteps.length}
+          onNext={advanceCoach}
+          onSkip={skipCoach}
+        />
+      )}
       {confirmRefresh && session && (
         <ConfirmModal
           message={`Re-fetch all games for ${session.username}? This clears the cached copy.`}
@@ -218,6 +264,16 @@ function App() {
             </span>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              type="button"
+              onClick={() => { setCoachStep(0); onboarding.replay(); }}
+              title="Show the quick tour"
+              aria-label="Show the quick tour"
+              style={{ ...headerBtnStyle, padding: 0, width: 30, height: 30, borderRadius: '50%', fontWeight: 700, lineHeight: 1 }}
+              className="header-btn"
+            >
+              ?
+            </button>
             {session && (
               <button type="button" onClick={handleRefresh} style={isMobile ? { ...headerBtnStyle, padding: '6px 10px' } : headerBtnStyle} className="header-btn">
                 {isMobile ? 'Refresh' : 'Refresh games'}
@@ -314,11 +370,11 @@ function App() {
               </div>}
 
               <div style={isMobile ? { ...controlCardStyle, width: '100%' } : controlCardStyle}>
-                <div style={{ marginBottom: 14 }}>
+                <div ref={playingAsRef} style={{ marginBottom: 14 }}>
                   <label style={controlLabelStyle}>Playing as</label>
                   <ColorToggle value={color} onChange={setColor} />
                 </div>
-                <div style={{ marginBottom: 14 }}>
+                <div ref={colourByRef} style={{ marginBottom: 14 }}>
                   <label style={controlLabelStyle}>Colour by</label>
                   <div style={{ display: 'inline-flex', borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border)' }}>
                     {(['opening', 'winrate'] as const).map((mode) => {
@@ -356,6 +412,34 @@ function App() {
                           key={String(on)}
                           type="button"
                           onClick={() => setEngineEnabled(on)}
+                          className="chip-btn"
+                          style={{
+                            background: active ? 'var(--accent)' : 'transparent',
+                            color: active ? '#111' : 'var(--text-muted)',
+                            border: 'none',
+                            padding: '6px 16px',
+                            cursor: 'pointer',
+                            fontSize: 13,
+                            fontWeight: active ? 600 : 400,
+                            transition: 'background 0.15s, color 0.15s',
+                          }}
+                        >
+                          {on ? 'On' : 'Off'}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div style={{ marginBottom: 14 }}>
+                  <label style={controlLabelStyle}>Sound</label>
+                  <div style={{ display: 'inline-flex', borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border)' }}>
+                    {([true, false] as const).map((on) => {
+                      const active = soundOn === on;
+                      return (
+                        <button
+                          key={String(on)}
+                          type="button"
+                          onClick={() => { setSoundEnabled(on); setSoundOn(on); }}
                           className="chip-btn"
                           style={{
                             background: active ? 'var(--accent)' : 'transparent',
@@ -488,7 +572,7 @@ function App() {
             {/* ── Right: chart or loading ── */}
             <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'flex-start', minWidth: 0, width: '100%', ...(isMobile ? { order: 1 } : {}) }}>
               {chartReady && total > 1 ? (
-                <div style={{ width: '100%' }}>
+                <div ref={chartContainerRef} style={{ width: '100%' }}>
                   <Sunburst
                     root={root}
                     totalGames={total}

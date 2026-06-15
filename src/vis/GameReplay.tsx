@@ -7,6 +7,7 @@ import type { Color, Result, TimeClass } from '../types';
 import { EvalBar } from './EvalBar';
 import { useStockfish, formatEval, classifyMove, CLASS_COLORS } from '../hooks/useStockfish';
 import type { EvalResult, MoveClass } from '../hooks/useStockfish';
+import { playMoveSound } from '../lib/sounds';
 
 // Human-readable label for each move classification.
 const CLASS_LABELS: Record<NonNullable<MoveClass>, string> = {
@@ -138,6 +139,19 @@ export function GameReplay({ focusPath, remainingMoves, orientation, gameId, gam
   // The position actually on the board: mainline, or the tip of the free-play stack.
   const fen = inFreePlay ? freePlay[freePlay.length - 1].fen : mainlineFen;
   const totalSteps = positions.length - 1;
+
+  // SAN of the move that produced the current board position (null at the start
+  // position). Drives move sounds via a single effect below, so every nav path
+  // — buttons, keyboard, jumps, tap-to-move, free-play — gets sound uniformly.
+  const currentSan = inFreePlay
+    ? freePlay[freePlay.length - 1].san
+    : cursor > 0 ? remainingMoves[cursor - 1] ?? null : null;
+  // Skip the sound on the very first render (mount), only play on changes.
+  const sanMountedRef = useRef(false);
+  useEffect(() => {
+    if (!sanMountedRef.current) { sanMountedRef.current = true; return; }
+    if (currentSan) playMoveSound(currentSan);
+  }, [currentSan, freePlay.length]);
 
   const { enqueue, enqueueMultiPV, evaluateAll, getPositionEval, getMultiPv, status } = useStockfish(engineEnabled);
 

@@ -21,6 +21,7 @@ import { EvalBar } from './EvalBar';
 import { formatEval } from '../hooks/useStockfish';
 import { useStockfish } from '../hooks/useStockfish';
 import { drawBoardOnCanvas } from './boardToCanvas';
+import { playMoveSound, playSound } from '../lib/sounds';
 import { ArrowLeft, ArrowLeftFromLine, Palette } from 'lucide-react';
 
 export interface SunburstHandle {
@@ -629,6 +630,7 @@ export function Sunburst({
       sequentialTimeoutRef.current = null;
     }
     if (moves.length <= 1) {
+      if (moves.length === 1) playMoveSound(moves[0]);
       onFocusChange([...base, ...moves]);
       return;
     }
@@ -636,6 +638,7 @@ export function Sunburst({
     let i = 0;
     const step = () => {
       path.push(moves[i]);
+      playMoveSound(moves[i]);
       onFocusChange([...path]);
       i++;
       if (i < moves.length) {
@@ -650,6 +653,7 @@ export function Sunburst({
   const handleZoomOut = () => {
     if (focusPath.length === 0) return;
     if (isMobile) setMobileInfo(null);
+    playSound('navigate');
     forwardHistoryRef.current = [focusPath[focusPath.length - 1], ...forwardHistoryRef.current];
     onFocusChange(focusPath.slice(0, -1));
   };
@@ -658,6 +662,7 @@ export function Sunburst({
     const next = forwardHistoryRef.current[0];
     if (!next) return;
     if (isMobile) setMobileInfo(null);
+    playMoveSound(next);
     forwardHistoryRef.current = forwardHistoryRef.current.slice(1);
     onFocusChange([...focusPath, next]);
   };
@@ -765,8 +770,9 @@ export function Sunburst({
       />
 
       {/* Colour-by toggle — cycles Opening ↔ Win rate. Sits in the top-right
-          corner of the chart's bounding box, clear of the inscribed circle. */}
-      {onColorModeChange && (
+          corner of the chart's bounding box, clear of the inscribed circle.
+          Mobile only — on desktop the sidebar "Colour by" control covers this. */}
+      {onColorModeChange && isMobile && (
         <button
           type="button"
           onClick={() => onColorModeChange(colorMode === 'opening' ? 'winrate' : 'opening')}
