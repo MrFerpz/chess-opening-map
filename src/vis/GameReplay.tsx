@@ -238,9 +238,6 @@ export function GameReplay({ focusPath, remainingMoves, orientation, gameId, gam
     });
   }, [remainingMoves, positions, focusPath.length, getPositionEval]);
 
-  // Classification of the move that led to the current mainline position (for the badge near the board).
-  const currentMoveClass = !inFreePlay && cursor > 0 ? moveClasses[cursor - 1] : null;
-
   // Top engine lines (MultiPV) for the current position, converted to SAN with
   // move numbers like "8.Ne2 Ba6 9.Qa4". Limited to the leading few plies.
   const topLines = useMemo(() => {
@@ -403,19 +400,6 @@ export function GameReplay({ focusPath, remainingMoves, orientation, gameId, gam
             onPieceDrop={onPieceDrop}
             onSquareClick={onSquareClick}
           />
-          {/* Classification of the move that reached this position */}
-          {engineEnabled && currentMoveClass && (
-            <div style={{
-              position: 'absolute', top: 8, left: 8,
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              background: 'rgba(17,17,17,0.85)', borderRadius: 6, padding: '4px 9px',
-              fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
-              color: CLASS_COLORS[currentMoveClass], backdropFilter: 'blur(2px)',
-            }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: CLASS_COLORS[currentMoveClass] }} />
-              {CLASS_LABELS[currentMoveClass]}
-            </div>
-          )}
         </div>
         {engineEnabled && (
           isMobile
