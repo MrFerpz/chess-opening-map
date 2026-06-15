@@ -22,7 +22,7 @@ import { formatEval } from '../hooks/useStockfish';
 import { useStockfish } from '../hooks/useStockfish';
 import { drawBoardOnCanvas } from './boardToCanvas';
 import { playMoveSound, playSound } from '../lib/sounds';
-import { ArrowLeft, ArrowLeftFromLine, Palette } from 'lucide-react';
+import { ArrowLeft, ArrowLeftFromLine, Palette, Volume2, VolumeX } from 'lucide-react';
 
 export interface SunburstHandle {
   exportPng: (filename?: string) => Promise<void>;
@@ -57,6 +57,8 @@ interface Props {
   openingName?: string | null;
   onTopLinesChange?: (lines: TopLine[]) => void;
   engineEnabled?: boolean;
+  soundOn?: boolean;
+  onSoundToggle?: (on: boolean) => void;
 }
 
 const ANIM_MS = 350;
@@ -107,6 +109,8 @@ export function Sunburst({
   openingName,
   onTopLinesChange,
   engineEnabled = true,
+  soundOn = true,
+  onSoundToggle,
 }: Props) {
   const visibleRings = visibleRingsProp ?? VISIBLE_RINGS;
   const holeUnits = holeUnitsProp ?? HOLE_UNITS;
@@ -769,28 +773,52 @@ export function Sunburst({
         onMouseLeave={() => { lastMousePos.current = null; setHover(null); evalCache.onLeave(); }}
       />
 
-      {/* Colour-by toggle — cycles Opening ↔ Win rate. Sits in the top-right
-          corner of the chart's bounding box, clear of the inscribed circle.
-          Mobile only — on desktop the sidebar "Colour by" control covers this. */}
+      {/* Colour-by toggle (cycles Opening ↔ Win rate) plus a mute toggle beneath
+          it. Sits in the top-right corner of the chart's bounding box, clear of
+          the inscribed circle. Mobile only — on desktop the sidebar controls
+          cover these. Right-aligned so both tiles hang off the same edge. */}
       {onColorModeChange && isMobile && (
-        <button
-          type="button"
-          onClick={() => onColorModeChange(colorMode === 'opening' ? 'winrate' : 'opening')}
-          title={colorMode === 'opening' ? 'Colour: opening (tap for win rate)' : 'Colour: win rate (tap for opening)'}
-          aria-label="Toggle colour mode"
-          style={{
-            position: 'absolute', top: 2, right: 2, zIndex: 3,
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            background: colorMode === 'winrate' ? 'var(--accent)' : 'rgba(13,15,22,0.85)',
-            color: colorMode === 'winrate' ? '#111' : 'var(--text-muted)',
-            border: '1px solid var(--border)', borderRadius: 8,
-            padding: '6px 9px', cursor: 'pointer', fontFamily: 'inherit',
-            fontSize: 11, fontWeight: 600, backdropFilter: 'blur(2px)',
-          }}
-        >
-          <Palette size={15} />
-          {colorMode === 'winrate' ? 'Win rate' : 'Opening'}
-        </button>
+        <div style={{
+          position: 'absolute', top: 2, right: 2, zIndex: 3,
+          display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8,
+        }}>
+          <button
+            type="button"
+            onClick={() => onColorModeChange(colorMode === 'opening' ? 'winrate' : 'opening')}
+            title={colorMode === 'opening' ? 'Colour: opening (tap for win rate)' : 'Colour: win rate (tap for opening)'}
+            aria-label="Toggle colour mode"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              background: colorMode === 'winrate' ? 'var(--accent)' : 'rgba(13,15,22,0.85)',
+              color: colorMode === 'winrate' ? '#111' : 'var(--text-muted)',
+              border: '1px solid var(--border)', borderRadius: 8,
+              padding: '6px 9px', cursor: 'pointer', fontFamily: 'inherit',
+              fontSize: 11, fontWeight: 600, backdropFilter: 'blur(2px)',
+            }}
+          >
+            <Palette size={15} />
+            {colorMode === 'winrate' ? 'Win rate' : 'Opening'}
+          </button>
+          {onSoundToggle && (
+            <button
+              type="button"
+              onClick={() => onSoundToggle(!soundOn)}
+              title={soundOn ? 'Sound on (tap to mute)' : 'Muted (tap to unmute)'}
+              aria-label={soundOn ? 'Mute sound' : 'Unmute sound'}
+              aria-pressed={!soundOn}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                background: 'rgba(13,15,22,0.85)',
+                color: 'var(--text-muted)',
+                border: '1px solid var(--border)', borderRadius: 8,
+                padding: '6px 9px', cursor: 'pointer', fontFamily: 'inherit',
+                fontSize: 11, fontWeight: 600, backdropFilter: 'blur(2px)',
+              }}
+            >
+              {soundOn ? <Volume2 size={15} /> : <VolumeX size={15} />}
+            </button>
+          )}
+        </div>
       )}
 
       <CenterBoard

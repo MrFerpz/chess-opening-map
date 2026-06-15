@@ -591,6 +591,8 @@ function App() {
                     openingName={openingName?.name ?? null}
                     onTopLinesChange={setNarrowTopLines}
                     engineEnabled={engineEnabled}
+                    soundOn={soundOn}
+                    onSoundToggle={(on) => { setSoundEnabled(on); setSoundOn(on); }}
                   />
                 </div>
               ) : isExplorer ? (
