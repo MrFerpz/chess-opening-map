@@ -21,7 +21,7 @@ import { EvalBar } from './EvalBar';
 import { formatEval } from '../hooks/useStockfish';
 import { useStockfish } from '../hooks/useStockfish';
 import { drawBoardOnCanvas } from './boardToCanvas';
-import { ArrowLeft, ArrowLeftFromLine } from 'lucide-react';
+import { ArrowLeft, ArrowLeftFromLine, Palette } from 'lucide-react';
 
 export interface SunburstHandle {
   exportPng: (filename?: string) => Promise<void>;
@@ -42,6 +42,7 @@ interface Props {
   totalGames: number;
   color: Color;
   colorMode?: ColorMode;
+  onColorModeChange?: (mode: ColorMode) => void;
   focusPath: string[];
   onFocusChange: (newPath: string[]) => void;
   size?: number;
@@ -50,6 +51,8 @@ interface Props {
   isNarrow?: boolean;
   visibleRings?: number;
   holeUnits?: number;
+  // When true, render one extra "ghost" ring beyond visibleRings, faded outward.
+  ghostRing?: boolean;
   openingName?: string | null;
   onTopLinesChange?: (lines: TopLine[]) => void;
   engineEnabled?: boolean;
@@ -57,6 +60,8 @@ interface Props {
 
 const ANIM_MS = 350;
 const MOBILE_ZOOM_DELAY_MS = 140;
+// Width (in ring units) of the faded ghost ring beyond the solid rings.
+const GHOST_UNITS = 0.7;
 
 // Canvas backing resolution. Phones often report DPR 2.6–3, which makes every
 // repaint push 2–3× the pixels of DPR 2 for no visible gain at this size —
@@ -88,6 +93,7 @@ export function Sunburst({
   totalGames,
   color,
   colorMode = 'opening',
+  onColorModeChange,
   focusPath,
   onFocusChange,
   size = 720,
@@ -96,6 +102,7 @@ export function Sunburst({
   isNarrow,
   visibleRings: visibleRingsProp,
   holeUnits: holeUnitsProp,
+  ghostRing = false,
   openingName,
   onTopLinesChange,
   engineEnabled = true,
@@ -129,14 +136,28 @@ export function Sunburst({
 
   useEffect(() => () => {
     if (mobileZoomTimeoutRef.current != null) window.clearTimeout(mobileZoomTimeoutRef.current);
+    if (sequentialTimeoutRef.current != null) window.clearTimeout(sequentialTimeoutRef.current);
   }, []);
 
+  // A ghost ring (if enabled) gets a thin band beyond the solid rings; reserving
+  // it in the unit budget shrinks the solid rings only slightly.
+  const ghostUnits = ghostRing ? GHOST_UNITS : 0;
   const radius = size / 2;
-  const ringRadius = radius / (holeUnits + visibleRings);
+  const ringRadius = radius / (holeUnits + visibleRings + ghostUnits);
   const holeRadius = ringRadius * holeUnits;
   const boardSize = Math.floor(holeRadius * Math.SQRT2);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Max depth we actually render (ghost ring adds one beyond the solid rings).
+  const maxDepth = visibleRings + (ghostRing ? 1 : 0);
+  // Target rect for an arc, accounting for the ghost ring's thinner band.
+  const targetForArc = (n: SunburstNode): Rect => {
+    if (ghostRing && n.depth === visibleRings + 1) {
+      return { x0: n.x0, x1: n.x1, y0: holeUnits + visibleRings, y1: holeUnits + visibleRings + GHOST_UNITS };
+    }
+    return targetFor(n, visibleRings, holeUnits);
+  };
 
   const hierarchyRoot = useMemo(() => buildHierarchy(rootData), [rootData]);
   const nodes = useMemo(
@@ -165,6 +186,7 @@ export function Sunburst({
   const lastMousePos = useRef<{ x: number; y: number } | null>(null);
   const highlightedArcKeyRef = useRef<string | null>(null);
   const mobileZoomTimeoutRef = useRef<number | null>(null);
+  const sequentialTimeoutRef = useRef<number | null>(null);
   const activeMobilePointerRef = useRef<{ pointerId: number; key: string } | null>(null);
   const clickHandledByPointerRef = useRef(false);
   // Set to true when focusPath changes; cleared after the next hover re-detection.
@@ -250,11 +272,20 @@ export function Sunburst({
       ctx.arc(cx, cy, outerR, startAngle, endAngle);
       ctx.arc(cx, cy, innerR, endAngle, startAngle, true);
       ctx.closePath();
-      ctx.fillStyle = fill;
-      ctx.fill();
-      ctx.strokeStyle = '#13161f';
-      ctx.lineWidth = 1.5 * dpr;
-      ctx.stroke();
+      // The ghost ring (one level beyond the solid rings) is drawn at a flat,
+      // reduced opacity — faded but uniform, no radial gradient.
+      const depth = nodeDataRef.current.get(key)?.depth;
+      if (depth === visibleRings + 1) {
+        ctx.fillStyle = withAlpha(fill, 0.32);
+        ctx.fill();
+        // No stroke on ghost arcs — keep them airy.
+      } else {
+        ctx.fillStyle = fill;
+        ctx.fill();
+        ctx.strokeStyle = '#13161f';
+        ctx.lineWidth = 1.5 * dpr;
+        ctx.stroke();
+      }
     }
 
     // Labels (drawn after all arcs so they sit on top)
@@ -270,6 +301,7 @@ export function Sunburst({
       const nd = nodeDataRef.current.get(key);
       if (!nd?.san) continue;
       if (isMobile && nd.depth > 2) continue;
+      if (nd.depth === visibleRings + 1) continue; // ghost ring: no labels
 
       const midAngle = (r.x0 + r.x1) / 2 - Math.PI / 2;
       const midR = ((r.y0 + r.y1) / 2) * rr;
@@ -386,9 +418,9 @@ export function Sunburst({
       justZoomedRef.current = false;
 
       for (const n of nodes) {
-        if (n.depth === 0 || n.depth > visibleRings) continue;
+        if (n.depth === 0 || n.depth > maxDepth) continue;
         const key = pathKey(n);
-        const newTarget = targetFor(n, visibleRings, holeUnits);
+        const newTarget = targetForArc(n);
         if (snapAll) {
           animMap.current.set(key, { start: newTarget, target: newTarget, startedAt: now });
         } else {
@@ -417,9 +449,9 @@ export function Sunburst({
       if (isFocusChange) justZoomedRef.current = true;
 
       for (const n of nodes) {
-        if (n.depth === 0 || n.depth > visibleRings) continue;
+        if (n.depth === 0 || n.depth > maxDepth) continue;
         const key = pathKey(n);
-        const tgt = targetFor(n, visibleRings, holeUnits);
+        const tgt = targetForArc(n);
 
         if (isFocusChange) {
           // Snap immediately — no animation on zoom.
@@ -444,8 +476,8 @@ export function Sunburst({
   }, [rootData, focusPath.join('>')]);
 
   const renderableNodes = useMemo(
-    () => nodes.filter((n) => n.depth > 0 && n.depth <= visibleRings),
-    [nodes, visibleRings],
+    () => nodes.filter((n) => n.depth > 0 && n.depth <= maxDepth),
+    [nodes, maxDepth],
   );
 
   // ─── Hover re-detection after focus change ───────────────────────────────
@@ -491,7 +523,7 @@ export function Sunburst({
     const point = getChartPoint(clientX, clientY);
     if (!point) return null;
     return renderableNodes.find((n) => {
-      const tgt = targetFor(n, visibleRings, holeUnits);
+      const tgt = targetForArc(n);
       if (point.yUnit < tgt.y0 || point.yUnit >= tgt.y1) return false;
       return point.angle >= tgt.x0 && point.angle < tgt.x1;
     }) ?? null;
@@ -570,23 +602,49 @@ export function Sunburst({
     const local = localPath(n);
     if (local.length === 0) return;
     if (isMobile) {
-      const nextMove = local[0];
       setMobileInfo(n.data);
       evalCache.onHover(n.data.fen);
       highlightArc(n);
       if (mobileZoomTimeoutRef.current != null) {
         window.clearTimeout(mobileZoomTimeoutRef.current);
       }
+      // Play every move on the clicked path sequentially (a 2nd-ring arc is two
+      // moves), animating into each one rather than only the first.
       mobileZoomTimeoutRef.current = window.setTimeout(() => {
         highlightedArcKeyRef.current = null;
         mobileZoomTimeoutRef.current = null;
         forwardHistoryRef.current = [];
-        onFocusChange([...focusPath, nextMove]);
+        applyMovesSequentially([...focusPath], local);
       }, MOBILE_ZOOM_DELAY_MS);
       return;
     }
     forwardHistoryRef.current = [];
-    onFocusChange([...focusPath, ...local]);
+    applyMovesSequentially([...focusPath], local);
+  };
+
+  // Drill into `moves` one at a time so each move animates before the next.
+  const applyMovesSequentially = (base: string[], moves: string[]) => {
+    if (sequentialTimeoutRef.current != null) {
+      window.clearTimeout(sequentialTimeoutRef.current);
+      sequentialTimeoutRef.current = null;
+    }
+    if (moves.length <= 1) {
+      onFocusChange([...base, ...moves]);
+      return;
+    }
+    const path = [...base];
+    let i = 0;
+    const step = () => {
+      path.push(moves[i]);
+      onFocusChange([...path]);
+      i++;
+      if (i < moves.length) {
+        sequentialTimeoutRef.current = window.setTimeout(step, ANIM_MS);
+      } else {
+        sequentialTimeoutRef.current = null;
+      }
+    };
+    step();
   };
 
   const handleZoomOut = () => {
@@ -705,6 +763,29 @@ export function Sunburst({
         onClick={handlePointerClick}
         onMouseLeave={() => { lastMousePos.current = null; setHover(null); evalCache.onLeave(); }}
       />
+
+      {/* Colour-by toggle — cycles Opening ↔ Win rate. Sits in the top-right
+          corner of the chart's bounding box, clear of the inscribed circle. */}
+      {onColorModeChange && (
+        <button
+          type="button"
+          onClick={() => onColorModeChange(colorMode === 'opening' ? 'winrate' : 'opening')}
+          title={colorMode === 'opening' ? 'Colour: opening (tap for win rate)' : 'Colour: win rate (tap for opening)'}
+          aria-label="Toggle colour mode"
+          style={{
+            position: 'absolute', top: 2, right: 2, zIndex: 3,
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            background: colorMode === 'winrate' ? 'var(--accent)' : 'rgba(13,15,22,0.85)',
+            color: colorMode === 'winrate' ? '#111' : 'var(--text-muted)',
+            border: '1px solid var(--border)', borderRadius: 8,
+            padding: '6px 9px', cursor: 'pointer', fontFamily: 'inherit',
+            fontSize: 11, fontWeight: 600, backdropFilter: 'blur(2px)',
+          }}
+        >
+          <Palette size={15} />
+          {colorMode === 'winrate' ? 'Win rate' : 'Opening'}
+        </button>
+      )}
 
       <CenterBoard
         fen={hover?.node.fen ?? focusFen}
@@ -998,6 +1079,17 @@ export function Sunburst({
     })()}
     </div>
   );
+}
+
+// Convert a #rrggbb (or #rgb) hex colour to an rgba() string with the given alpha.
+function withAlpha(hex: string, alpha: number): string {
+  let h = hex.replace('#', '');
+  if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  if ([r, g, b].some(Number.isNaN)) return hex; // not hex — leave as-is
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 function sameArray(a: string[], b: string[]): boolean {

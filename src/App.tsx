@@ -494,6 +494,7 @@ function App() {
                     totalGames={total}
                     color={color}
                     colorMode={colorMode}
+                    onColorModeChange={setColorMode}
                     focusPath={snapshotFocusPath}
                     onFocusChange={setFocusPath}
                     size={680}
@@ -501,6 +502,7 @@ function App() {
                     isNarrow={isNarrow}
                     visibleRings={isMobile ? 2 : undefined}
                     holeUnits={isMobile ? 4 : undefined}
+                    ghostRing={isMobile}
                     exportRef={sunburstRef}
                     openingName={openingName?.name ?? null}
                     onTopLinesChange={setNarrowTopLines}

@@ -15,8 +15,22 @@ export interface PositionEval {
   bestMove: string | null; // UCI e.g. "e2e4"
 }
 
+// A single ranked line from a MultiPV search.
+export interface PvLine {
+  eval: EvalResult | null;
+  moves: string[]; // UCI moves, best line first; we keep the first few
+}
+
 // Module-level cache shared across all hook instances (survives re-renders).
 const cache = new Map<string, PositionEval>();
+// Separate cache for MultiPV (top-N) results — keyed by FEN, never collides
+// with the single-PV eval used by the eval bar / graph.
+const multiPvCache = new Map<string, PvLine[]>();
+
+// How many ranked lines to request when doing a MultiPV search.
+const MULTIPV_COUNT = 3;
+// How many leading moves of each line we keep (for display like "Ne2 Ba6 Qa4").
+const MULTIPV_PLIES = 6;
 
 type Status = 'idle' | 'ready' | 'thinking';
 
@@ -43,13 +57,16 @@ export function useStockfish(enabled = true) {
   const workerRef = useRef<Worker | null>(null);
   const [status, setStatus] = useState<Status>('idle');
   const [evals, setEvals] = useState<Map<string, PositionEval>>(new Map());
+  const [multiPv, setMultiPv] = useState<Map<string, PvLine[]>>(new Map());
   const readyRef = useRef(false);
 
   // Queue of pending evaluations — processed one at a time. Priority items
   // (from enqueue) sit at the front; background items (from evaluateAll) at the back.
-  const queueRef = useRef<Array<{ fen: string; resolve: () => void; background?: boolean }>>([]);
+  const queueRef = useRef<Array<{ fen: string; resolve: () => void; background?: boolean; multipv?: number }>>([]);
   const runningRef = useRef(false);
   const runningFenRef = useRef<string | null>(null);
+  // MultiPV setting currently applied to the engine; lets us skip redundant setoption calls.
+  const engineMultiPvRef = useRef(1);
   const pauseUntilRef = useRef(0);
   const holdUntilRef = useRef(0);
   const pauseTimerRef = useRef<number | null>(null);
@@ -58,10 +75,17 @@ export function useStockfish(enabled = true) {
 
   // Latest depth-N info for the current evaluation.
   const latestInfoRef = useRef<{ eval: EvalResult | null; bestMove: string | null }>({ eval: null, bestMove: null });
+  // Latest per-rank lines for the current MultiPV evaluation (index 0 == multipv 1).
+  const latestLinesRef = useRef<PvLine[]>([]);
 
   const store = useCallback((fen: string, result: PositionEval) => {
     cache.set(fen, result);
     setEvals((prev) => { const next = new Map(prev); next.set(fen, result); return next; });
+  }, []);
+
+  const storeMultiPv = useCallback((fen: string, lines: PvLine[]) => {
+    multiPvCache.set(fen, lines);
+    setMultiPv((prev) => { const next = new Map(prev); next.set(fen, lines); return next; });
   }, []);
 
   const processNext = useCallback(() => {
@@ -88,10 +112,18 @@ export function useStockfish(enabled = true) {
     }
 
     const next = queueRef.current.shift()!;
+    const wantMultiPv = next.multipv ?? 1;
 
-    if (cache.has(next.fen)) {
-      // Already cached — seed local state and move on.
+    // Single-PV requests can be served straight from cache; MultiPV requests
+    // need their own (richer) result, so only short-circuit when wantMultiPv === 1.
+    if (wantMultiPv === 1 && cache.has(next.fen)) {
       store(next.fen, cache.get(next.fen)!);
+      next.resolve();
+      processNextRef.current?.();
+      return;
+    }
+    if (wantMultiPv > 1 && multiPvCache.has(next.fen)) {
+      storeMultiPv(next.fen, multiPvCache.get(next.fen)!);
       next.resolve();
       processNextRef.current?.();
       return;
@@ -100,7 +132,12 @@ export function useStockfish(enabled = true) {
     runningRef.current = true;
     runningFenRef.current = next.fen;
     latestInfoRef.current = { eval: null, bestMove: null };
+    latestLinesRef.current = [];
     setStatus('thinking');
+    if (engineMultiPvRef.current !== wantMultiPv) {
+      workerRef.current.postMessage(`setoption name MultiPV value ${wantMultiPv}`);
+      engineMultiPvRef.current = wantMultiPv;
+    }
     workerRef.current.postMessage(`position fen ${next.fen}`);
     workerRef.current.postMessage(GO_COMMAND);
 
@@ -117,11 +154,20 @@ export function useStockfish(enabled = true) {
       if (line.startsWith('info') && line.includes('score') && line.includes(' pv ')) {
         const mateMatch = line.match(/\bscore mate (-?\d+)/);
         const cpMatch = line.match(/\bscore cp (-?\d+)/);
-        const pvMatch = line.match(/\bpv (\S+)/);
+        const pvMatch = line.match(/\bpv (.+)$/);
+        const rankMatch = line.match(/\bmultipv (\d+)/);
         let ev: EvalResult | null = null;
         if (mateMatch) ev = { type: 'mate', value: parseInt(mateMatch[1]) * toWhitePov };
         else if (cpMatch) ev = { type: 'cp', value: parseInt(cpMatch[1]) * toWhitePov };
-        if (ev) latestInfoRef.current = { eval: ev, bestMove: pvMatch?.[1] ?? null };
+        const pvMoves = pvMatch ? pvMatch[1].trim().split(/\s+/) : [];
+        if (ev) {
+          // multipv 1 (or absent) is the primary line — feed the single-PV result.
+          const rank = rankMatch ? parseInt(rankMatch[1]) : 1;
+          if (rank === 1) latestInfoRef.current = { eval: ev, bestMove: pvMoves[0] ?? null };
+          if (wantMultiPv > 1) {
+            latestLinesRef.current[rank - 1] = { eval: ev, moves: pvMoves.slice(0, MULTIPV_PLIES) };
+          }
+        }
       }
 
       if (line.startsWith('bestmove')) {
@@ -134,9 +180,13 @@ export function useStockfish(enabled = true) {
         };
         if (result.eval) {
           store(fen, result);
+          if (wantMultiPv > 1) {
+            const lines = latestLinesRef.current.filter(Boolean);
+            if (lines.length) storeMultiPv(fen, lines);
+          }
         } else {
           // Search was interrupted before producing a score — retry later.
-          queueRef.current.push({ fen, resolve: () => {}, background: true });
+          queueRef.current.push({ fen, resolve: () => {}, background: true, multipv: wantMultiPv });
         }
         resolve();
         runningRef.current = false;
@@ -147,7 +197,7 @@ export function useStockfish(enabled = true) {
     };
 
     workerRef.current.addEventListener('message', handler);
-  }, [store]);
+  }, [store, storeMultiPv]);
 
   useEffect(() => {
     processNextRef.current = processNext;
@@ -158,6 +208,7 @@ export function useStockfish(enabled = true) {
     const worker = new Worker('/stockfish-18-lite-single.js');
     workerRef.current = worker;
 
+    engineMultiPvRef.current = 1;
     const initHandler = (e: MessageEvent<string>) => {
       if (e.data === 'readyok') {
         readyRef.current = true;
@@ -207,6 +258,26 @@ export function useStockfish(enabled = true) {
     });
   }, [processNext, store, enabled]);
 
+  // Enqueue a MultiPV (top-N lines) search for a single FEN, with priority.
+  // Interrupts any in-flight search for a different position, like enqueue.
+  const enqueueMultiPV = useCallback((fen: string): Promise<void> => {
+    return new Promise((resolve) => {
+      if (!enabled) { resolve(); return; }
+      if (multiPvCache.has(fen)) {
+        storeMultiPv(fen, multiPvCache.get(fen)!);
+        resolve();
+        return;
+      }
+      queueRef.current.unshift({ fen, resolve, multipv: MULTIPV_COUNT });
+      pauseUntilRef.current = Date.now() + BACKGROUND_PAUSE_MS;
+      holdUntilRef.current = Date.now() + SEARCH_START_DELAY_MS;
+      if (runningRef.current && runningFenRef.current !== fen) {
+        workerRef.current?.postMessage('stop');
+      }
+      processNext();
+    });
+  }, [processNext, storeMultiPv, enabled]);
+
   // Evaluate all positions in order (for background analysis).
   const evaluateAll = useCallback((fens: string[]) => {
     if (!enabled) return;
@@ -224,7 +295,13 @@ export function useStockfish(enabled = true) {
     return undefined;
   }, [evals]);
 
-  return { enqueue, evaluateAll, getPositionEval, status };
+  const getMultiPv = useCallback((fen: string): PvLine[] | undefined => {
+    if (multiPv.has(fen)) return multiPv.get(fen);
+    if (multiPvCache.has(fen)) return multiPvCache.get(fen);
+    return undefined;
+  }, [multiPv]);
+
+  return { enqueue, enqueueMultiPV, evaluateAll, getPositionEval, getMultiPv, status };
 }
 
 // Classify a move by the eval drop it caused (from white's perspective).
