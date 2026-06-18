@@ -62,7 +62,7 @@ function uciToArrow(uci: string | null, color = '#3ddc97'): Arrow[] {
 
 // Memoized so eval-cache updates streaming in from the engine don't re-render
 // the board (and stutter its piece animation).
-const ReplayBoard = React.memo(function ReplayBoard({ fen, orientation, bestMove, size, dimmed, squareStyles, onPieceDrop, onSquareClick }: {
+const ReplayBoard = React.memo(function ReplayBoard({ fen, orientation, bestMove, size, dimmed, squareStyles, onPieceDrop, onSquareClick, onPieceClick }: {
   fen: string;
   orientation: Color;
   bestMove: string | null;
@@ -71,6 +71,7 @@ const ReplayBoard = React.memo(function ReplayBoard({ fen, orientation, bestMove
   squareStyles: Record<string, React.CSSProperties>;
   onPieceDrop: (args: { sourceSquare: string; targetSquare: string | null }) => boolean;
   onSquareClick: (args: { square: string }) => void;
+  onPieceClick: (args: { square: string }) => void;
 }) {
   return (
     <div style={{
@@ -98,6 +99,7 @@ const ReplayBoard = React.memo(function ReplayBoard({ fen, orientation, bestMove
             squareStyles,
             onPieceDrop,
             onSquareClick,
+            onPieceClick,
           }}
         />
       </div>
@@ -316,8 +318,9 @@ export function GameReplay({ focusPath, remainingMoves, orientation, gameId, gam
     return styles;
   }, [selected, legalTargets]);
 
-  // Tap a piece to select it (showing legal moves), tap a destination to move,
-  // tap the same piece again to deselect, tap another own piece to reselect.
+  // Tap a square to select the piece on it (showing legal moves), tap a
+  // destination to move, tap the same piece again to deselect, tap another own
+  // piece to reselect.
   const onSquareClick = useCallback(({ square }: { square: string }) => {
     if (selected) {
       if (square === selected) { setSelected(null); return; }
@@ -332,6 +335,12 @@ export function GameReplay({ focusPath, remainingMoves, orientation, gameId, gam
       else setSelected(null);
     } catch { setSelected(null); }
   }, [selected, fen, tryMove]);
+
+  // On touch devices, tapping a piece dispatches react-chessboard's onPieceClick
+  // (the piece sits above its square and swallows the tap), not onSquareClick —
+  // so without this, tapping a piece on mobile selects nothing. Route it through
+  // the same selection logic, keyed by the piece's square.
+  const onPieceClick = onSquareClick;
 
   const onPieceDrop = useCallback(({ sourceSquare, targetSquare }: { sourceSquare: string; targetSquare: string | null }) => {
     if (!targetSquare) return false;
@@ -413,6 +422,7 @@ export function GameReplay({ focusPath, remainingMoves, orientation, gameId, gam
             squareStyles={squareStyles}
             onPieceDrop={onPieceDrop}
             onSquareClick={onSquareClick}
+            onPieceClick={onPieceClick}
           />
         </div>
         {engineEnabled && (

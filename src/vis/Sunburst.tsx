@@ -294,7 +294,7 @@ export function Sunburst({
     }
 
     // Labels (drawn after all arcs so they sit on top)
-    const fontSize = (isMobile ? 14 : 11) * dpr;
+    const fontSize = (isMobile ? 16 : 12.5) * dpr;
     ctx.font = `600 ${fontSize}px DM Sans, system-ui`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';

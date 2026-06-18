@@ -22,6 +22,7 @@ import { CoachMark } from './ui/CoachMark';
 import { useOnboarding } from './hooks/useOnboarding';
 import { isSoundEnabled, setSoundEnabled } from './lib/sounds';
 import { checkUserExists } from './api/platform';
+import { Volume2, VolumeX } from 'lucide-react';
 
 interface Session {
   platform: Platform;
@@ -274,6 +275,19 @@ function App() {
             >
               ?
             </button>
+            {!isMobile && (
+              <button
+                type="button"
+                onClick={() => { setSoundEnabled(!soundOn); setSoundOn(!soundOn); }}
+                title={soundOn ? 'Sound on (click to mute)' : 'Muted (click to unmute)'}
+                aria-label={soundOn ? 'Mute sound' : 'Unmute sound'}
+                aria-pressed={!soundOn}
+                style={{ ...headerBtnStyle, padding: 0, width: 30, height: 30, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                className="header-btn"
+              >
+                {soundOn ? <Volume2 size={15} /> : <VolumeX size={15} />}
+              </button>
+            )}
             {session && (
               <button type="button" onClick={handleRefresh} style={isMobile ? { ...headerBtnStyle, padding: '6px 10px' } : headerBtnStyle} className="header-btn">
                 {isMobile ? 'Refresh' : 'Refresh games'}
@@ -412,34 +426,6 @@ function App() {
                           key={String(on)}
                           type="button"
                           onClick={() => setEngineEnabled(on)}
-                          className="chip-btn"
-                          style={{
-                            background: active ? 'var(--accent)' : 'transparent',
-                            color: active ? '#111' : 'var(--text-muted)',
-                            border: 'none',
-                            padding: '6px 16px',
-                            cursor: 'pointer',
-                            fontSize: 13,
-                            fontWeight: active ? 600 : 400,
-                            transition: 'background 0.15s, color 0.15s',
-                          }}
-                        >
-                          {on ? 'On' : 'Off'}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-                <div style={{ marginBottom: 14 }}>
-                  <label style={controlLabelStyle}>Sound</label>
-                  <div style={{ display: 'inline-flex', borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border)' }}>
-                    {([true, false] as const).map((on) => {
-                      const active = soundOn === on;
-                      return (
-                        <button
-                          key={String(on)}
-                          type="button"
-                          onClick={() => { setSoundEnabled(on); setSoundOn(on); }}
                           className="chip-btn"
                           style={{
                             background: active ? 'var(--accent)' : 'transparent',
