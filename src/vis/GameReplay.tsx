@@ -62,16 +62,17 @@ function uciToArrow(uci: string | null, color = '#3ddc97'): Arrow[] {
 
 // Memoized so eval-cache updates streaming in from the engine don't re-render
 // the board (and stutter its piece animation).
-const ReplayBoard = React.memo(function ReplayBoard({ fen, orientation, bestMove, size, dimmed, squareStyles, onPieceDrop, onSquareClick, onPieceClick }: {
+const ReplayBoard = React.memo(function ReplayBoard({ fen, orientation, bestMove, size, dimmed, squareStyles, allowDragging, onPieceDrop, onSquareClick, onPieceClick }: {
   fen: string;
   orientation: Color;
   bestMove: string | null;
   size: number;
   dimmed: boolean;
   squareStyles: Record<string, React.CSSProperties>;
+  allowDragging: boolean;
   onPieceDrop: (args: { sourceSquare: string; targetSquare: string | null }) => boolean;
   onSquareClick: (args: { square: string }) => void;
-  onPieceClick: (args: { square: string }) => void;
+  onPieceClick: (args: { square: string | null }) => void;
 }) {
   return (
     <div style={{
@@ -90,7 +91,7 @@ const ReplayBoard = React.memo(function ReplayBoard({ fen, orientation, bestMove
         <Chessboard
           options={{
             position: fen,
-            allowDragging: true,
+            allowDragging,
             showNotation: true,
             boardOrientation: orientation,
             animationDurationInMs: 150,
@@ -122,6 +123,13 @@ export function GameReplay({ focusPath, remainingMoves, orientation, gameId, gam
   // The full move list is collapsed by default — it gets long for full games.
   const [movesOpen, setMovesOpen] = useState(false);
   const moveListRef = useRef<HTMLDivElement>(null);
+
+  // On real touch devices, react-chessboard's drag sensor activates on first
+  // contact with no deadzone, which swallows the touch and suppresses the
+  // synthetic click a tap would otherwise fire — breaking tap-to-move. Desktop
+  // mice (and devtools' mouse-event-based mobile emulation) aren't affected,
+  // so only disable dragging where the pointer is actually coarse.
+  const [allowDragging] = useState(() => !(window.matchMedia?.('(pointer: coarse)').matches ?? false));
 
   // Build all positions up front.
   const positions: string[] = useMemo(() => {
@@ -340,7 +348,9 @@ export function GameReplay({ focusPath, remainingMoves, orientation, gameId, gam
   // (the piece sits above its square and swallows the tap), not onSquareClick —
   // so without this, tapping a piece on mobile selects nothing. Route it through
   // the same selection logic, keyed by the piece's square.
-  const onPieceClick = onSquareClick;
+  const onPieceClick = useCallback(({ square }: { square: string | null }) => {
+    if (square) onSquareClick({ square });
+  }, [onSquareClick]);
 
   const onPieceDrop = useCallback(({ sourceSquare, targetSquare }: { sourceSquare: string; targetSquare: string | null }) => {
     if (!targetSquare) return false;
@@ -420,6 +430,7 @@ export function GameReplay({ focusPath, remainingMoves, orientation, gameId, gam
             size={boardSize}
             dimmed={inFreePlay}
             squareStyles={squareStyles}
+            allowDragging={allowDragging}
             onPieceDrop={onPieceDrop}
             onSquareClick={onSquareClick}
             onPieceClick={onPieceClick}
