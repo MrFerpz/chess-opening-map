@@ -607,6 +607,7 @@ export function Sunburst({
     const local = localPath(n);
     if (local.length === 0) return;
     if (isMobile) {
+      if (n.depth === 3) return;
       setMobileInfo(n.data);
       evalCache.onHover(n.data.fen);
       highlightArc(n);
