@@ -219,8 +219,8 @@ export function LoadingBoard({ state, isMobile, onStop }: Props) {
           }}
         >
           <svg
+            className="cv-spinner"
             width="28" height="28" viewBox="0 0 28 28"
-            style={{ animation: 'cv-spin 1s linear infinite' }}
           >
             <circle cx="14" cy="14" r="11" fill="none" stroke="#333" strokeWidth="3" />
             <circle cx="14" cy="14" r="11" fill="none" stroke="var(--accent)" strokeWidth="3"
@@ -256,8 +256,8 @@ export function LoadingBoard({ state, isMobile, onStop }: Props) {
           }}
         >
           <svg
+            className={isWorking ? 'cv-spinner' : undefined}
             width="28" height="28" viewBox="0 0 28 28"
-            style={{ animation: isWorking ? 'cv-spin 1s linear infinite' : 'none' }}
           >
             <circle cx="14" cy="14" r="11" fill="none" stroke="#333" strokeWidth="3" />
             <circle cx="14" cy="14" r="11" fill="none" stroke="var(--accent)" strokeWidth="3"

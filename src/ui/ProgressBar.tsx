@@ -33,6 +33,9 @@ function Spinner() {
       borderRadius: '50%',
       display: 'inline-block',
       animation: 'cv-spin 0.8s linear infinite',
+      willChange: 'transform',
+      transform: 'translateZ(0)',
+      backfaceVisibility: 'hidden',
     }} />
   );
 }

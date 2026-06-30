@@ -52,7 +52,17 @@ button {
 }
 
 @keyframes cv-spin {
-  to { transform: rotate(360deg); }
+  to { transform: translateZ(0) rotate(360deg); }
+}
+
+/* Spinner promoted to its own compositor layer so the rotation runs on the GPU,
+   independent of main-thread work (JSON parsing, re-renders) during fetching.
+   Without this the spin stutters on mobile as fetch progress re-renders fire. */
+.cv-spinner {
+  animation: cv-spin 1s linear infinite;
+  will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 @keyframes skeleton-spin {
