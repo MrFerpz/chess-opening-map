@@ -141,7 +141,6 @@ export function Sunburst({
 
   useEffect(() => () => {
     if (mobileZoomTimeoutRef.current != null) window.clearTimeout(mobileZoomTimeoutRef.current);
-    if (sequentialTimeoutRef.current != null) window.clearTimeout(sequentialTimeoutRef.current);
   }, []);
 
   // A ghost ring (if enabled) gets a thin band beyond the solid rings; reserving
@@ -191,7 +190,6 @@ export function Sunburst({
   const lastMousePos = useRef<{ x: number; y: number } | null>(null);
   const highlightedArcKeyRef = useRef<string | null>(null);
   const mobileZoomTimeoutRef = useRef<number | null>(null);
-  const sequentialTimeoutRef = useRef<number | null>(null);
   const activeMobilePointerRef = useRef<{ pointerId: number; key: string } | null>(null);
   const clickHandledByPointerRef = useRef(false);
   // Set to true when focusPath changes; cleared after the next hover re-detection.
@@ -577,6 +575,9 @@ export function Sunburst({
     if (!isMobile) return;
     const hit = getNodeAtClientPoint(ev.clientX, ev.clientY);
     if (!hit) return;
+    // Ignore the 3rd ring outward (and the ghost ring beyond it): no preview,
+    // no highlight — leave it untouched.
+    if (hit.depth >= 3) return;
     ev.preventDefault();
     activeMobilePointerRef.current = { pointerId: ev.pointerId, key: pathKey(hit) };
     setMobileInfo(hit.data);
@@ -607,7 +608,7 @@ export function Sunburst({
     const local = localPath(n);
     if (local.length === 0) return;
     if (isMobile) {
-      if (n.depth === 3) return;
+      if (n.depth >= 3) return;
       setMobileInfo(n.data);
       evalCache.onHover(n.data.fen);
       highlightArc(n);
@@ -620,39 +621,22 @@ export function Sunburst({
         highlightedArcKeyRef.current = null;
         mobileZoomTimeoutRef.current = null;
         forwardHistoryRef.current = [];
-        applyMovesSequentially([...focusPath], local);
+        drillTo([...focusPath, ...local]);
       }, MOBILE_ZOOM_DELAY_MS);
       return;
     }
     forwardHistoryRef.current = [];
-    applyMovesSequentially([...focusPath], local);
+    drillTo([...focusPath, ...local]);
   };
 
-  // Drill into `moves` one at a time so each move animates before the next.
-  const applyMovesSequentially = (base: string[], moves: string[]) => {
-    if (sequentialTimeoutRef.current != null) {
-      window.clearTimeout(sequentialTimeoutRef.current);
-      sequentialTimeoutRef.current = null;
-    }
-    if (moves.length <= 1) {
-      if (moves.length === 1) playMoveSound(moves[0]);
-      onFocusChange([...base, ...moves]);
-      return;
-    }
-    const path = [...base];
-    let i = 0;
-    const step = () => {
-      path.push(moves[i]);
-      playMoveSound(moves[i]);
-      onFocusChange([...path]);
-      i++;
-      if (i < moves.length) {
-        sequentialTimeoutRef.current = window.setTimeout(step, ANIM_MS);
-      } else {
-        sequentialTimeoutRef.current = null;
-      }
-    };
-    step();
+  // Zoom straight to `target` in one step. A clicked 2nd-ring arc is two moves;
+  // we jump to the final position rather than stepping through the intermediate
+  // one, so there's a single smooth zoom instead of a pause-then-quickfire as
+  // each intermediate snapshot loads. Play the sound of the last move played.
+  const drillTo = (target: string[]) => {
+    const lastMove = target[target.length - 1];
+    if (lastMove) playMoveSound(lastMove);
+    onFocusChange(target);
   };
 
   const handleZoomOut = () => {
