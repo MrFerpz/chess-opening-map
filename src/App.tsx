@@ -706,7 +706,7 @@ function LandingView({ onSubmit, onExploreBand, isMobile }: {
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '0 16px',
+        padding: isMobile ? '0 16px 50px' : '0 16px',
         minHeight: '100vh',
         position: 'relative',
         overflow: 'hidden',
@@ -727,11 +727,11 @@ function LandingView({ onSubmit, onExploreBand, isMobile }: {
               <>Explore a <span style={{ color: 'var(--accent)' }}>rating band</span></>
             )}
           </h2>
-          <p style={{ margin: 0, fontSize: 14, color: 'var(--text-muted)', textAlign: 'center', fontWeight: 400 }}>
-            {landingMode === 'user'
-              ? 'Visualise your most-played openings as white and black'
-              : 'Browse what players in a rating range actually play, from 100,000s of Lichess games'}
-          </p>
+          {landingMode !== 'user' && (
+            <p style={{ margin: 0, fontSize: 14, color: 'var(--text-muted)', textAlign: 'center', fontWeight: 400 }}>
+              Browse what players in a rating range actually play, from 100,000s of Lichess games
+            </p>
+          )}
         </div>
 
         {/* Mode toggle */}

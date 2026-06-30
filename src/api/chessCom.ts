@@ -124,20 +124,48 @@ export async function* fetchChessCom(
     : archives;
 
   const reversed = filtered.reverse();
-  const CONCURRENCY = 6;
+  const CONCURRENCY = 8;
 
-  // Fetch months in parallel batches, preserving newest-first order.
-  for (let i = 0; i < reversed.length; i += CONCURRENCY) {
-    const batch = reversed.slice(i, i + CONCURRENCY);
-    const results = await Promise.all(
-      batch.map(async (url) => {
-        const res = await fetch(url);
-        if (!res.ok) return [];
-        const data = (await res.json()) as { games: ChessComGame[] };
-        return (data.games ?? []).reverse();
-      }),
-    );
-    for (const games of results) {
+  async function fetchMonth(url: string): Promise<ChessComGame[]> {
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    const data = (await res.json()) as { games: ChessComGame[] };
+    return (data.games ?? []).reverse();
+  }
+
+  // Continuous pool: keep CONCURRENCY months in flight at all times, but yield
+  // them strictly newest-first so the sunburst fills in chronological order.
+  // A new month starts the instant any lane frees up, instead of waiting for a
+  // whole batch's slowest request (which the old Promise.all batching did).
+  let next = 0;
+  const inFlight = new Map<number, Promise<{ index: number; games: ChessComGame[] }>>();
+
+  const launch = () => {
+    while (inFlight.size < CONCURRENCY && next < reversed.length) {
+      const index = next++;
+      inFlight.set(
+        index,
+        fetchMonth(reversed[index]).then((games) => ({ index, games })),
+      );
+    }
+  };
+
+  launch();
+  let wantIndex = 0;
+  // Buffer results that arrive out of order until their turn comes.
+  const ready = new Map<number, ChessComGame[]>();
+
+  while (inFlight.size > 0 || ready.has(wantIndex)) {
+    if (!ready.has(wantIndex)) {
+      const { index, games } = await Promise.race(inFlight.values());
+      inFlight.delete(index);
+      ready.set(index, games);
+      launch();
+    }
+    while (ready.has(wantIndex)) {
+      const games = ready.get(wantIndex)!;
+      ready.delete(wantIndex);
+      wantIndex++;
       for (const raw of games) {
         const g = normalise(raw, username);
         if (!g) continue;

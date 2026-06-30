@@ -218,14 +218,13 @@ export function LoadingBoard({ state, isMobile, onStop }: Props) {
             gap: 10,
           }}
         >
-          <svg
-            className="cv-spinner"
-            width="28" height="28" viewBox="0 0 28 28"
-          >
-            <circle cx="14" cy="14" r="11" fill="none" stroke="#333" strokeWidth="3" />
-            <circle cx="14" cy="14" r="11" fill="none" stroke="var(--accent)" strokeWidth="3"
-              strokeDasharray="44" strokeDashoffset="33" strokeLinecap="round" />
-          </svg>
+          <div className="cv-spinner" style={{ width: 28, height: 28 }}>
+            <svg width="28" height="28" viewBox="0 0 28 28">
+              <circle cx="14" cy="14" r="11" fill="none" stroke="#333" strokeWidth="3" />
+              <circle cx="14" cy="14" r="11" fill="none" stroke="var(--accent)" strokeWidth="3"
+                strokeDasharray="44" strokeDashoffset="33" strokeLinecap="round" />
+            </svg>
+          </div>
           <div style={{ color: 'var(--text-muted)', font: '16px system-ui', textAlign: 'center' }}>
             {statusLabel}
           </div>
@@ -255,14 +254,13 @@ export function LoadingBoard({ state, isMobile, onStop }: Props) {
             gap: 10,
           }}
         >
-          <svg
-            className={isWorking ? 'cv-spinner' : undefined}
-            width="28" height="28" viewBox="0 0 28 28"
-          >
-            <circle cx="14" cy="14" r="11" fill="none" stroke="#333" strokeWidth="3" />
-            <circle cx="14" cy="14" r="11" fill="none" stroke="var(--accent)" strokeWidth="3"
-              strokeDasharray="44" strokeDashoffset="33" strokeLinecap="round" />
-          </svg>
+          <div className={isWorking ? 'cv-spinner' : undefined} style={{ width: 28, height: 28 }}>
+            <svg width="28" height="28" viewBox="0 0 28 28">
+              <circle cx="14" cy="14" r="11" fill="none" stroke="#333" strokeWidth="3" />
+              <circle cx="14" cy="14" r="11" fill="none" stroke="var(--accent)" strokeWidth="3"
+                strokeDasharray="44" strokeDashoffset="33" strokeLinecap="round" />
+            </svg>
+          </div>
           <div style={{ color: 'var(--text-muted)', font: '700 14px system-ui', textAlign: 'center' }}>
             {statusLabel}
           </div>
