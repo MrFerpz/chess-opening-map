@@ -228,7 +228,7 @@ function App() {
   const [coachSteps, setCoachSteps] = useState<{ target: HTMLElement; text: string }[]>([]);
   useEffect(() => {
     if (!showCoach) { setCoachSteps([]); return; }
-    const candidates = [
+    const candidates: { target: HTMLElement | null; text: string }[] = [
       { target: chartContainerRef.current, text: 'Click any ring to zoom into that line. Click the centre to step back out.' },
       {
         target: isMobile ? colourByMobileRef.current : colourByRef.current,
