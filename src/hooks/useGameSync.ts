@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, type RefObject } from 'react';
 import type { Color, Filter, Game, Platform, SnapshotRequest } from '../types';
 import { fetchGames } from '../api/platform';
 import { getSyncMeta, listGames, putGames, setSyncMeta } from '../store/cache';
@@ -18,16 +18,25 @@ interface StartArgs {
   client: AggregatorClient;
   platform: Platform;
   username: string;
-  color: Color;
-  filter: Filter;
-  request: SnapshotRequest;
   // Max total games to fetch+cache. null = unlimited.
   limit: number | null;
 }
 
+/**
+ * Snapshot inputs as of *right now*. A fetch can run for minutes, and the user is
+ * free to change colour/filter/focus while it does, so the final snapshot must be
+ * requested with present-tense values rather than whatever was current at start().
+ */
+export interface LiveSnapshotArgs {
+  client: AggregatorClient;
+  color: Color;
+  filter: Filter;
+  request: SnapshotRequest;
+}
+
 const BATCH = 50;
 
-export function useGameSync() {
+export function useGameSync(liveArgsRef: RefObject<LiveSnapshotArgs>) {
   const [state, setState] = useState<SyncRunState>({
     status: 'idle',
     fromCache: 0,
@@ -38,22 +47,28 @@ export function useGameSync() {
 
   // Shared mutable ref so stop() can signal the running start() loop.
   const stopRef = useRef(false);
-  // Hold the snapshot args so stop() can flush and render what we have.
-  const pendingSnapshotRef = useRef<{ client: AggregatorClient; color: Color; filter: Filter; request: SnapshotRequest } | null>(null);
+  // True while a start() run is in flight, so stop() only flushes a live run.
+  const runningRef = useRef(false);
+
+  // Flush a final snapshot using the *current* colour/filter/focus, not the values
+  // that were live when the fetch began.
+  const flushSnapshot = useCallback(() => {
+    const live = liveArgsRef.current;
+    live.client.requestSnapshot(live.color, live.filter, live.request);
+  }, [liveArgsRef]);
 
   const stop = useCallback(() => {
     stopRef.current = true;
-    const p = pendingSnapshotRef.current;
-    if (p) {
-      p.client.requestSnapshot(p.color, p.filter, p.request);
-      pendingSnapshotRef.current = null;
+    if (runningRef.current) {
+      flushSnapshot();
+      runningRef.current = false;
     }
     setState((s) => ({ ...s, status: 'done' }));
-  }, []);
+  }, [flushSnapshot]);
 
-  const start = useCallback(async ({ client, platform, username, color, filter, request, limit }: StartArgs) => {
+  const start = useCallback(async ({ client, platform, username, limit }: StartArgs) => {
     stopRef.current = false;
-    pendingSnapshotRef.current = { client, color, filter, request };
+    runningRef.current = true;
     setState({ status: 'loading-cache', fromCache: 0, fetched: 0, limit, error: null });
     try {
       client.reset();
@@ -93,22 +108,22 @@ export function useGameSync() {
       }
       // If stop() already fired it already called requestSnapshot; skip here.
       if (!stopRef.current) {
-        client.requestSnapshot(color, filter, request);
+        flushSnapshot();
       }
-      pendingSnapshotRef.current = null;
+      runningRef.current = false;
       if (newestPlayedAt > 0) {
         await setSyncMeta(platform, username, newestPlayedAt);
       }
       setState((s) => ({ ...s, status: 'done', fetched }));
     } catch (err) {
-      pendingSnapshotRef.current = null;
+      runningRef.current = false;
       setState((s) => ({
         ...s,
         status: 'error',
         error: err instanceof Error ? err.message : String(err),
       }));
     }
-  }, []);
+  }, [flushSnapshot]);
 
   return { state, start, stop };
 }

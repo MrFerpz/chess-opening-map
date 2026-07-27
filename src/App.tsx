@@ -13,7 +13,7 @@ import { GameReplay, type GameMeta } from './vis/GameReplay';
 import { useAggregator, EMPTY_ROOT } from './hooks/useAggregator';
 import { useExplorer } from './hooks/useExplorer';
 import type { SerializedNode } from './types';
-import { useGameSync } from './hooks/useGameSync';
+import { useGameSync, type LiveSnapshotArgs } from './hooks/useGameSync';
 import { useOpeningName } from './hooks/useOpeningName';
 import { clearUser, findGameByMoves } from './store/cache';
 import { encodeShareUrl, decodeShareUrl } from './lib/shareUrl';
@@ -106,7 +106,13 @@ function App() {
   const isExplorer = explorerSession != null;
 
   const { client, snapshot, error: workerError } = useAggregator(color, filter, request);
-  const { state: sync, start, stop } = useGameSync();
+  // Kept current every render so a fetch that finishes after the user changed
+  // colour/filter/focus requests its final snapshot with the live values.
+  const liveSnapshotArgs = useRef<LiveSnapshotArgs>({ client, color, filter, request });
+  useEffect(() => {
+    liveSnapshotArgs.current = { client, color, filter, request };
+  }, [client, color, filter, request]);
+  const { state: sync, start, stop } = useGameSync(liveSnapshotArgs);
   const explorer = useExplorer(
     color,
     explorerSession?.band ?? DEFAULT_BAND,
@@ -125,11 +131,10 @@ function App() {
       client,
       platform: session.platform,
       username: session.username,
-      color,
-      filter,
-      request,
       limit: filter.limit,
     });
+    // Colour/filter/focus deliberately excluded: they are not fetch parameters, so
+    // changing them must not restart the sync. The final snapshot reads them live.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, client, reloadCount]);
 
