@@ -96,6 +96,7 @@ function App() {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const playingAsRef = useRef<HTMLDivElement>(null);
   const colourByRef = useRef<HTMLDivElement>(null);
+  const colourByMobileRef = useRef<HTMLButtonElement>(null);
   const [coachStep, setCoachStep] = useState(0);
 
   const request: SnapshotRequest = useMemo(
@@ -224,12 +225,15 @@ function App() {
   // render, then held in state for the CoachMark popover to anchor to.
   const chartLoaded = hasSession && chartReady && total > 1;
   const showCoach = onboarding.showCoachMarks && chartLoaded;
-  const [coachSteps, setCoachSteps] = useState<{ target: HTMLDivElement; text: string }[]>([]);
+  const [coachSteps, setCoachSteps] = useState<{ target: HTMLElement; text: string }[]>([]);
   useEffect(() => {
     if (!showCoach) { setCoachSteps([]); return; }
     const candidates = [
       { target: chartContainerRef.current, text: 'Click any ring to zoom into that line. Click the centre to step back out.' },
-      { target: colourByRef.current, text: 'Switch to Win rate to colour each move green (winning) or red (losing).' },
+      {
+        target: isMobile ? colourByMobileRef.current : colourByRef.current,
+        text: 'Switch to Win rate to colour each move green (winning) or red (losing).',
+      },
       {
         target: playingAsRef.current,
         text: isExplorer
@@ -237,8 +241,8 @@ function App() {
           : 'Switch between your games as White and Black.',
       },
     ];
-    setCoachSteps(candidates.filter((s): s is { target: HTMLDivElement; text: string } => s.target != null));
-  }, [showCoach, isExplorer]);
+    setCoachSteps(candidates.filter((s): s is { target: HTMLElement; text: string } => s.target != null));
+  }, [showCoach, isExplorer, isMobile]);
   const activeCoach = coachSteps[coachStep];
   const advanceCoach = () => {
     if (coachStep + 1 >= coachSteps.length) { onboarding.finish(); setCoachStep(0); }
@@ -593,6 +597,7 @@ function App() {
                     engineEnabled={engineEnabled}
                     soundOn={soundOn}
                     onSoundToggle={(on) => { setSoundEnabled(on); setSoundOn(on); }}
+                    colorToggleRef={colourByMobileRef}
                   />
                 </div>
               ) : isExplorer ? (

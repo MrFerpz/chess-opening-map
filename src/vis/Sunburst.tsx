@@ -59,6 +59,7 @@ interface Props {
   engineEnabled?: boolean;
   soundOn?: boolean;
   onSoundToggle?: (on: boolean) => void;
+  colorToggleRef?: React.Ref<HTMLButtonElement>;
 }
 
 const ANIM_MS = 350;
@@ -111,6 +112,7 @@ export function Sunburst({
   engineEnabled = true,
   soundOn = true,
   onSoundToggle,
+  colorToggleRef,
 }: Props) {
   const visibleRings = visibleRingsProp ?? VISIBLE_RINGS;
   const holeUnits = holeUnitsProp ?? HOLE_UNITS;
@@ -774,6 +776,7 @@ export function Sunburst({
           display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8,
         }}>
           <button
+            ref={colorToggleRef}
             type="button"
             onClick={() => onColorModeChange(colorMode === 'opening' ? 'winrate' : 'opening')}
             title={colorMode === 'opening' ? 'Colour: opening (tap for win rate)' : 'Colour: win rate (tap for opening)'}
