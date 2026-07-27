@@ -488,6 +488,7 @@ export function Sunburst({
   // Geometrically hit-tests the stored cursor position against the new arc layout.
   useEffect(() => {
     if (!pendingHoverUpdate.current) return;
+    if (isMobile) { pendingHoverUpdate.current = false; return; }
     if (!lastMousePos.current) {
       pendingHoverUpdate.current = false;
       return;
@@ -538,6 +539,10 @@ export function Sunburst({
   }
 
   function handlePointerMove(ev: React.MouseEvent<HTMLCanvasElement>) {
+    // Hover is desktop-only. On mobile a tap still emits a compatibility
+    // mousemove, which would otherwise preview the tapped arc on the centre
+    // board — including ghost-ring arcs, which must stay non-interactive.
+    if (isMobile) return;
     lastMousePos.current = { x: ev.clientX, y: ev.clientY };
     const hit = getNodeAtClientPoint(ev.clientX, ev.clientY);
     if (!hit) {
@@ -575,10 +580,11 @@ export function Sunburst({
     if (!isMobile) return;
     const hit = getNodeAtClientPoint(ev.clientX, ev.clientY);
     if (!hit) return;
+    // preventDefault regardless, so a tap never emits compatibility mouse events.
+    ev.preventDefault();
     // Ignore the 3rd ring outward (and the ghost ring beyond it): no preview,
     // no highlight — leave it untouched.
     if (hit.depth >= 3) return;
-    ev.preventDefault();
     activeMobilePointerRef.current = { pointerId: ev.pointerId, key: pathKey(hit) };
     setMobileInfo(hit.data);
     evalCache.onHover(hit.data.fen);
