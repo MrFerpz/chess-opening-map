@@ -224,11 +224,16 @@ function App() {
     if (!showCoach) { setCoachSteps([]); return; }
     const candidates = [
       { target: chartContainerRef.current, text: 'Click any ring to zoom into that line. Click the centre to step back out.' },
-      { target: playingAsRef.current, text: 'Switch between your games as White and Black.' },
       { target: colourByRef.current, text: 'Switch to Win rate to colour each move green (winning) or red (losing).' },
+      {
+        target: playingAsRef.current,
+        text: isExplorer
+          ? 'Switch between games played as White and Black in this rating band.'
+          : 'Switch between your games as White and Black.',
+      },
     ];
     setCoachSteps(candidates.filter((s): s is { target: HTMLDivElement; text: string } => s.target != null));
-  }, [showCoach]);
+  }, [showCoach, isExplorer]);
   const activeCoach = coachSteps[coachStep];
   const advanceCoach = () => {
     if (coachStep + 1 >= coachSteps.length) { onboarding.finish(); setCoachStep(0); }
@@ -384,13 +389,17 @@ function App() {
               </div>}
 
               <div style={isMobile ? { ...controlCardStyle, width: '100%' } : controlCardStyle}>
-                <div ref={playingAsRef} style={{ marginBottom: 14 }}>
+                <div style={{ marginBottom: 14 }}>
                   <label style={controlLabelStyle}>Playing as</label>
-                  <ColorToggle value={color} onChange={setColor} />
+                  {/* ref sits on the toggle itself so the coach mark highlights the
+                      buttons rather than the label + control block. */}
+                  <div ref={playingAsRef} style={{ display: 'inline-block' }}>
+                    <ColorToggle value={color} onChange={setColor} />
+                  </div>
                 </div>
-                <div ref={colourByRef} style={{ marginBottom: 14 }}>
+                <div style={{ marginBottom: 14 }}>
                   <label style={controlLabelStyle}>Colour by</label>
-                  <div style={{ display: 'inline-flex', borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border)' }}>
+                  <div ref={colourByRef} style={{ display: 'inline-flex', borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border)' }}>
                     {(['opening', 'winrate'] as const).map((mode) => {
                       const active = colorMode === mode;
                       return (

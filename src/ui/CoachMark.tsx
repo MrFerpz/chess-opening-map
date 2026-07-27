@@ -51,7 +51,20 @@ export function CoachMark({ target, text, step, total, onNext, onSkip }: Props) 
 
   return createPortal(
     <>
-      {/* Highlight ring around the target */}
+      {/* Backdrop. Swallows clicks so the user can't interact with the page
+          mid-tour — otherwise clicking e.g. a sunburst segment refocuses the
+          chart and leaves the popover anchored to a stale rect. */}
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,0.55)',
+          zIndex: 1099,
+        }}
+      />
+      {/* Highlight ring around the target. Purely decorative — sits above the
+          backdrop and never intercepts pointer events. */}
       <div
         style={{
           position: 'fixed',
@@ -61,7 +74,6 @@ export function CoachMark({ target, text, step, total, onNext, onSkip }: Props) 
           height: rect.height + 12,
           borderRadius: 10,
           border: '2px solid var(--accent)',
-          boxShadow: '0 0 0 9999px rgba(0,0,0,0.55)',
           pointerEvents: 'none',
           zIndex: 1100,
           transition: 'all 0.2s ease',
